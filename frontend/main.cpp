@@ -4859,6 +4859,12 @@ int main(int argc, char** argv)
                     if (!opt.noSave) FlushSave(opt.save);
                     cfg.Save(opt.config);
                 }
+                else if (ev.type == SDL_APP_DIDENTERFOREGROUND)
+                {
+                    // Back from sleep or the background: the emulated clock only ran while the
+                    // game did, but a real DS's clock keeps going. Catch it up to the current time.
+                    if (!opt.headless || getenv("SSR_CLOCK")) SetClock(*nds, opt.headless);
+                }
                 else if (touchPadUsed && (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP))
                 {
                     int ow = 0, oh = 0;
