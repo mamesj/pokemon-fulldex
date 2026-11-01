@@ -5933,10 +5933,17 @@ int main(int argc, char** argv)
                 const u32* screenImagesPrev = nds->GPU.Framebuffer[nds->GPU.FrontBuffer][1].get();
                 auto usable = [&](int i) {
                     if (cmd) return !battleFightOnly || i == 0;
-                    uint32_t c = screenImagesPrev[(movY[i] - 14) * 256 + movX[i]];
-                    // (Platinum's moves are on a pale yellow panel.)
-                    if (pt.on) return ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 140;
-                    return ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 200;
+                    // One pixel at the name's centre can fall between two letters (a move whose
+                    // name has a gap there could not be chosen): look across the name instead.
+                    for (int y = movY[i] - 16; y <= movY[i] - 12; y++)
+                        for (int x = movX[i] - 28; x <= movX[i] + 28; x++)
+                        {
+                            const uint32_t c = screenImagesPrev[y * 256 + x];
+                            // (Platinum's moves are on a pale yellow panel.)
+                            if (((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > (pt.on ? 140 : 200))
+                                return true;
+                        }
+                    return false;
                 };
                 if (singleView())
                 {
