@@ -859,6 +859,10 @@ inline std::vector<Setting> SettingsList()
 #endif
 #endif
     l.push_back({ "show_fps", "FPS COUNTER", onOff, "0", "SHOWS THE FRAMES A SECOND IN A CORNER." });
+    std::vector<std::pair<std::string, std::string>> textSizes;
+    for (int size = 1; size <= 50; size++) textSizes.push_back({ std::to_string(size), Menu::TextSizeName(size) });
+    l.push_back({ "cheat_text_size", "CHEAT UI TEXT SCALE", textSizes, "10",
+                  "CHEAT LIST TEXT SCALE: 1X IS DEFAULT." });
     l.push_back({ "volume", "VOLUME", { { "0", "OFF" }, { "10", "10%" }, { "20", "20%" }, { "30", "30%" }, { "40", "40%" }, { "50", "50%" }, { "60", "60%" }, { "70", "70%" }, { "80", "80%" }, { "90", "90%" }, { "100", "100%" } }, "100",
                   "THE GAME'S SOUND AND MUSIC. OFF FOR NONE. ALSO IN THE PAUSE MENU WHILE YOU PLAY." });
 #ifdef __SWITCH__
@@ -984,7 +988,7 @@ inline int GroupOf(const Setting& s)
     if (!s.key) return !strcmp(s.name, "KEYS AND BUTTONS") ? 3 : 7;
     if (!strncmp(s.key, "list_", 5)) return 5;
     if (!strcmp(s.key, "ra") || !strcmp(s.key, "!ra_login")) return 6;
-    static const char* display[] = { "view", "large_screen", "fullscreen", "smooth", "battle_buttons", "show_fps" };
+    static const char* display[] = { "view", "large_screen", "fullscreen", "smooth", "battle_buttons", "show_fps", "cheat_text_size" };
     static const char* controls[] = { "start_button", "buttons", "pad_touch" };
     for (const char* k : display)
         if (!strcmp(s.key, k)) return 0;
@@ -1056,7 +1060,7 @@ struct SettingsPage
             std::string names;
             for (const Setting& s : all)
                 if (GroupOf(s) == g) names += (names.empty() ? "" : " / ") + std::string(s.name);
-            groupText[g] = names + ".";
+            groupText[g] = sg.text[0] ? sg.text : names + ".";
             items.push_back({ sg.key, sg.name, { { "", ">" } }, "", groupText[g].c_str() });
         }
         selected = row;
@@ -1105,6 +1109,7 @@ struct SettingsPage
                 if (atoi(s.values[i].first.c_str()) <= atoi(v.c_str())) best = (int)i;
             return best;
         }
+        if (!strcmp(s.key, "cheat_text_size")) return std::clamp(atoi(v.c_str()), 1, 50) - 1;
         for (size_t i = 0; i < s.values.size(); i++)
             if (s.values[i].first == s.def) return (int)i;
         return 0;
@@ -1133,7 +1138,8 @@ struct SettingsPage
         if (s.key[0] == '!') return s.key; // (done by the caller)
         const int n = (int)s.values.size();
         const int i = ValueIndex(s);
-        const int next = i < 0 ? (d > 0 ? 0 : n - 1) : (i + d + n) % n;
+        const int next = !strcmp(s.key, "cheat_text_size") ? std::clamp(i + d, 0, n - 1)
+                       : i < 0 ? (d > 0 ? 0 : n - 1) : (i + d + n) % n;
         const std::string line = std::string(s.key) + "=" + s.values[next].first;
         bool found = false;
         for (std::string& l : lines)

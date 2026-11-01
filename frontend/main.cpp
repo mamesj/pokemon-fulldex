@@ -1317,6 +1317,7 @@ struct Settings
     // the bottom screen up.
     bool padTouch = false;
     bool showFps = false; // frames shown per second, in a corner
+    int cheatTextSize = 10; // tenths of the usual menu text size (0.1X to 5X)
     // A controller's START (+ on the Switch) opens the pause menu instead of being the DS's
     // START, which the games hardly use (START BUTTON: PAUSE MENU or DS START).
     bool startMenu = true;
@@ -1395,6 +1396,7 @@ struct Settings
             else if (k == "fps60") fps60 = v == "1";
             else if (k == "pad_touch") padTouch = v == "1";
             else if (k == "show_fps") showFps = v == "1";
+            else if (k == "cheat_text_size") cheatTextSize = std::clamp(atoi(v.c_str()), 1, 50);
             else if (k == "volume") volume = std::clamp(atoi(v.c_str()) / 10 * 10, 0, 100);
             // (The game list's look, GAME LIST: kept here so saving does not drop them; COLOUR is the
             // pause menu's colour too.)
@@ -1446,6 +1448,7 @@ struct Settings
         f << "fps60=" << (fps60 ? 1 : 0) << "\n";
         f << "pad_touch=" << (padTouch ? 1 : 0) << "\n";
         f << "show_fps=" << (showFps ? 1 : 0) << "\n";
+        f << "cheat_text_size=" << cheatTextSize << "\n";
         f << "ff_low_res=" << (ffLowRes ? 1 : 0) << "\n";
         f << "volume=" << volume << "\n";
         if (!listColour.empty()) f << "list_colour=" << listColour << "\n";
@@ -3954,9 +3957,10 @@ int main(int argc, char** argv)
         M_WIDELINES, M_AUTODETAIL, M_WIDEGPU, M_GPU3D, M_SHOWFPS, M_BUTTONS, M_PADTOUCH, M_EMULATION,
         M_CONTROLS, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
         M_DISPLAY, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
+        M_CHEATTEXT,
         M_VOLUME, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_BOTHVER,
         M_RA_LIST, M_ACH_POINTS, M_ACH_STATUS, M_ACH_RARITY,
-        M_CHEAT0 = 1000, // (M_CHEAT0 + i: cheat i, CHEATS)
+        M_CHEAT0 = 1000, // (M_CHEAT0 + i: visible row i, CHEATS)
         M_ACH0 = 30000   // (M_ACH0 + i: achievement i, ACHIEVEMENTS)
     };
     enum { PAGE_MAIN, PAGE_KEYS, PAGE_DISPLAY, PAGE_GRAPHICS, PAGE_CONTROLS, PAGE_CHEATS, PAGE_RA, PAGE_SOUND, PAGE_RA_LIST, PAGE_RA_DETAIL };
@@ -3970,6 +3974,9 @@ int main(int argc, char** argv)
     int sliderTap = -1; // a tap on a slider's bar (Menu::SliderAt): the value, for its row's action
     std::string raTyped, raUser;
     std::vector<int> menuIds;
+    std::vector<Cheats::Row> cheatRows;
+    MenuLayout cheatLayout;
+    MenuRepeat cheatRepeat;
     bool fastLock = false;
     double ffFrameMs = 0; // emulation time of one frame while fast forwarding (see speed)
     // World detail choices: the most lines the widescreen 3D is drawn at (192 is the DS's own).
@@ -4022,8 +4029,8 @@ int main(int argc, char** argv)
 #endif
         menu.items.clear();
         menuIds.clear();
-        auto add = [&](int id, const char* label, const std::string& value, bool info = false) {
-            menu.items.push_back({ label, value, info });
+        auto add = [&](int id, const char* label, const std::string& value, bool info = false, bool directional = false) {
+            menu.items.push_back({ label, value, info, -1, directional });
             menuIds.push_back(id);
         };
         auto onOff = [](bool on) { return std::string(on ? "ON" : "OFF"); };
@@ -4060,6 +4067,7 @@ int main(int argc, char** argv)
             add(M_BATTLEBUTTONS, "BATTLE BUTTONS",
                 !funcWatchOn || pt.on ? "-" : cfg.battleButtons == 2 ? "PANEL" : cfg.battleButtons == 0 || !bw1.on ? "CORNER" : "STRIP");
             add(M_SHOWFPS, "FPS COUNTER", onOff(cfg.showFps));
+            add(M_CHEATTEXT, "CHEAT UI TEXT SCALE", Menu::TextSizeName(cfg.cheatTextSize));
             add(M_BACK, "BACK", "");
         }
         else if (menuPage == PAGE_SOUND)
@@ -4117,8 +4125,14 @@ int main(int argc, char** argv)
         else if (menuPage == PAGE_CHEATS)
         {
             if (cheats.items.empty()) add(M_NOTHING, "NONE FOUND FOR THIS GAME", "");
-            for (size_t i = 0; i < cheats.items.size(); i++)
-                add(M_CHEAT0 + (int)i, cheats.items[i].name.c_str(), cheats.items[i].on ? "ON" : "OFF");
+            cheatRows = cheats.Rows();
+            for (size_t i = 0; i < cheatRows.size(); i++)
+            {
+                const auto& row = cheatRows[i];
+                const std::string label = cheats.Label(row);
+                add(M_CHEAT0 + (int)i, label.c_str(), row.folder ? cheats.FolderValue(row.index)
+                    : cheats.items[row.index].on ? "ON" : "OFF", false, row.folder);
+            }
             add(M_BACK, "BACK", "");
         }
         else if (menuPage == PAGE_RA_LIST)
@@ -4190,10 +4204,29 @@ int main(int argc, char** argv)
     // To another page of the pause menu, on the row of item `select` (its first row: -1).
     auto goPage = [&](int page, int select) {
         menuPage = page;
+        menu.scroll = 0;
+        cheatRepeat.Update(0, 0);
         buildMenu();
+        if (page == PAGE_CHEATS)
+        {
+            cheatLayout = {};
+            // Include hidden cheats and the largest possible folder counts in the initial
+            // width, so opening folders and switching codes never changes the panel's size.
+            for (const auto& row : cheats.Rows(true))
+                cheatLayout.items.push_back({ cheats.Label(row), row.folder ? std::to_string(cheats.Count(row.index)) : "OFF" });
+            if (cheats.items.empty()) cheatLayout.items.push_back({ "NONE FOUND FOR THIS GAME", "" });
+            cheatLayout.items.push_back({ "BACK", "" });
+        }
         menu.selected = 0;
         for (size_t i = 0; i < menuIds.size(); i++)
             if (menuIds[i] == select) menu.selected = (int)i;
+    };
+    // Collapse a folder without losing the selected row when its children disappear.
+    auto collapseCheatFolder = [&](int parent) {
+        cheats.folders[parent].expanded = false;
+        buildMenu();
+        for (size_t i = 0; i < cheatRows.size(); i++)
+            if (cheatRows[i].folder && cheatRows[i].index == parent) menu.selected = (int)i;
     };
     buildMenu();
     // RETROACHIEVEMENTS' LOG IN: on from the user name to the password, and the login; or not.
@@ -4811,7 +4844,7 @@ int main(int argc, char** argv)
                         sliderTap = menu.SliderAt((int)fx);
                         nav.accept = true;
                     }
-                    else if (menu.items[item].value.empty()) nav.accept = true;
+                    else if (menu.items[item].value.empty() || menu.items[item].directional) nav.accept = true;
                     else if (fx < menu.drawnX + menu.drawnW / 3) nav.left = true;
                     else nav.right = true;
                 }
@@ -5247,6 +5280,12 @@ int main(int argc, char** argv)
         heldNow.down = ps.btn[PAD_DOWN] || ps.ly > 0.5f;
         heldNow.left = ps.btn[PAD_LEFT] || ps.lx < -0.5f;
         heldNow.right = ps.btn[PAD_RIGHT] || ps.lx > 0.5f;
+        if (menu.open && menuPage == PAGE_CHEATS && !opt.headless && !opt.testRun && capturing < 0)
+        {
+            const Uint8* kb = SDL_GetKeyboardState(nullptr);
+            heldNow.up |= kb[SDL_SCANCODE_UP] || kb[cfg.controls.Key(Controls::UP)];
+            heldNow.down |= kb[SDL_SCANCODE_DOWN] || kb[cfg.controls.Key(Controls::DOWN)];
+        }
         if (menu.open)
         {
             nav.up |= heldNow.up && !heldNav.up;
@@ -5255,6 +5294,12 @@ int main(int argc, char** argv)
             nav.right |= heldNow.right && !heldNav.right;
             nav.accept |= pressed(cfg.byLabel ? PAD_A : PAD_B);
             nav.back |= pressed(cfg.byLabel ? PAD_B : PAD_A);
+        }
+        const int cheatDirection = menu.open && menuPage == PAGE_CHEATS ? (int)heldNow.down - (int)heldNow.up : 0;
+        if (cheatRepeat.Update(cheatDirection, SDL_GetTicks()))
+        {
+            nav.up |= cheatDirection < 0;
+            nav.down |= cheatDirection > 0;
         }
         heldNav = heldNow;
 
@@ -5311,6 +5356,16 @@ int main(int argc, char** argv)
         {
             // B: from a page back to the menu (on the page's own item), from the menu back to the game.
             int backTo = -1;
+            if (nav.back && menuPage == PAGE_CHEATS && menu.selected >= 0 && menu.selected < (int)cheatRows.size())
+            {
+                const auto row = cheatRows[menu.selected];
+                const int parent = row.folder ? row.index : cheats.items[row.index].folder;
+                if (parent >= 0 && cheats.folders[parent].expanded)
+                {
+                    collapseCheatFolder(parent);
+                    nav = MenuInput();
+                }
+            }
             if (nav.back && menuPage != PAGE_MAIN)
             {
                 backTo = menuPage == PAGE_DISPLAY ? M_DISPLAY : menuPage == PAGE_SOUND ? M_SOUND : menuPage == PAGE_GRAPHICS ? M_GRAPHICS
@@ -5334,12 +5389,21 @@ int main(int argc, char** argv)
                 goPage(PAGE_RA_DETAIL, M_BACK);
                 hit = -1;
             }
-            if (id >= M_CHEAT0 && id < M_ACH0)
+            if (id >= M_CHEAT0 && id < M_ACH0 && id - M_CHEAT0 < (int)cheatRows.size())
             {
-                cheats.Toggle((size_t)(id - M_CHEAT0));
-                cheats.Apply(nds->AREngine);
-                Achievements::SetCheats(cheats.On() > 0 || exclusives.on);
-                fprintf(stderr, "[cheats] %s %s\n", cheats.items[id - M_CHEAT0].key.c_str(), cheats.items[id - M_CHEAT0].on ? "on" : "off");
+                const auto row = cheatRows[id - M_CHEAT0];
+                if (row.folder)
+                {
+                    auto& f = cheats.folders[row.index];
+                    f.expanded = dir < 0 ? false : dir > 0 ? true : !f.expanded;
+                }
+                else
+                {
+                    cheats.Toggle((size_t)row.index);
+                    cheats.Apply(nds->AREngine);
+                    Achievements::SetCheats(cheats.On() > 0 || exclusives.on);
+                    fprintf(stderr, "[cheats] %s %s\n", cheats.items[row.index].key.c_str(), cheats.items[row.index].on ? "on" : "off");
+                }
             }
             switch (id)
             {
@@ -5350,8 +5414,13 @@ int main(int argc, char** argv)
                 Achievements::SetCheats(cheats.On() > 0 || exclusives.on);
                 break;
             case M_CHEATS:
+                for (auto& f : cheats.folders) f.expanded = false;
                 goPage(PAGE_CHEATS, -1);
                 hit = -1;
+                break;
+            case M_CHEATTEXT:
+                cfg.cheatTextSize = std::clamp(cfg.cheatTextSize + (dir < 0 ? -1 : 1), 1, 50);
+                cfg.Save(opt.config);
                 break;
             case M_RA:
                 goPage(PAGE_RA, -1);
@@ -6847,9 +6916,14 @@ int main(int argc, char** argv)
             if (selId == M_RA_LOGIN) hint = Achievements::LoggedIn() ? "FORGETS THE ACCOUNT HERE" : "YOUR USER NAME AND PASSWORD";
             if (selId == M_RA_TYPED)
                 hint = touchPadUsed ? "THEN TAP HERE OR DONE" : ctlHasKeyboard ? "ENTER: NEXT   ESC: CANCEL" : "TYPE IT  THEN A";
-            if (selId >= M_CHEAT0 && selId < M_ACH0 && !(touchPadUsed && touchPad.visible)) hint = btn(Controls::A) + ": ON / OFF   " + btn(Controls::B) + ": BACK";
             if (selId == M_RA_LIST) hint = "WHAT EACH ASKS FOR";
-            std::string note = selId >= M_CHEAT0 && selId < M_ACH0 && selId - M_CHEAT0 < (int)cheats.items.size() ? cheats.items[selId - M_CHEAT0].note : std::string();
+            std::string note;
+            if (selId >= M_CHEAT0 && selId < M_ACH0 && selId - M_CHEAT0 < (int)cheatRows.size())
+            {
+                const auto& row = cheatRows[selId - M_CHEAT0];
+                note = row.folder ? cheats.folders[row.index].note : cheats.items[row.index].note;
+                if (!(touchPadUsed && touchPad.visible)) hint = btn(Controls::A) + (row.folder ? ": OPEN / CLOSE   " : ": ON / OFF   ") + btn(Controls::B) + ": BACK";
+            }
             std::string title = pageTitle[menuPage];
             if (menuPage == PAGE_RA_DETAIL && achDetail >= 0 && achDetail < (int)achList.size())
             {
@@ -6870,7 +6944,10 @@ int main(int argc, char** argv)
                     if (!r.unlocked && !r.progress.empty()) note += " SO FAR: " + r.progress;
                 }
             }
-            menu.Draw(canvas, title, hint, note);
+            const MenuStyle style = menuPage == PAGE_CHEATS ? MenuStyle{ cfg.cheatTextSize, true, true } : MenuStyle{};
+            if (menuPage == PAGE_CHEATS && cheatLayout.hint.empty())
+                cheatLayout.hint = btn(Controls::A) + ": OPEN / CLOSE   " + btn(Controls::B) + ": BACK";
+            menu.Draw(canvas, title, hint, note, style, menuPage == PAGE_CHEATS ? &cheatLayout : nullptr);
             }
             overlayUsed = true;
         }
