@@ -1,0 +1,465 @@
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 5f3f511..7dbc722 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -214,6 +214,10 @@ if (DEKOPON)
+     add_subdirectory(citra_switch)
+ endif()
+ 
++if (DEKOPON_PC)
++    add_subdirectory(citra_pc)
++endif()
++
+ if (ENABLE_LIBRETRO)
+     add_subdirectory(citra_libretro)
+ endif()
+diff --git a/src/citra_pc/CMakeLists.txt b/src/citra_pc/CMakeLists.txt
+new file mode 100644
+index 0000000..75f148b
+--- /dev/null
++++ b/src/citra_pc/CMakeLists.txt
+@@ -0,0 +1,13 @@
++# Dekopon's core on a PC, as a library for Pokemon Fulldex: the same core as the Switch build,
++# with an SDL2 + OpenGL window and input in place of citra_switch's libnx ones.
++add_library(citra_pc STATIC pc_frontend.cpp)
++target_link_libraries(citra_pc PUBLIC citra_core citra_common video_core audio_core input_common glad fmt)
++target_include_directories(citra_pc PRIVATE ${CMAKE_SOURCE_DIR}/src)
++find_package(SDL2 REQUIRED)
++target_link_libraries(citra_pc PRIVATE SDL2::SDL2)
++
++# A stand-in program: it prints the exact link line for Pokemon Fulldex to repeat, and plays a ROM
++# given on the command line (the same code Fulldex calls) for a test without the game list.
++file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp" "int DekoponPcPlay(const char*, const char*);\nint main(int c, char** v) { return c < 2 ? 1 : DekoponPcPlay(v[1], c > 2 ? v[2] : \"./dekopon/\"); }\n")
++add_executable(citra_pc_probe "${CMAKE_CURRENT_BINARY_DIR}/probe.cpp")
++target_link_libraries(citra_pc_probe PRIVATE citra_pc)
+diff --git a/src/citra_pc/pc_frontend.cpp b/src/citra_pc/pc_frontend.cpp
+new file mode 100644
+index 0000000..4152172
+--- /dev/null
++++ b/src/citra_pc/pc_frontend.cpp
+@@ -0,0 +1,304 @@
++// Dekopon's core on a PC: plays one ROM in an SDL2 + OpenGL window. Mirrors what citra_switch does
++// (emulation.cpp, emu_window.cpp, input.cpp) with SDL in place of libnx.
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++#include <array>
++#include <atomic>
++#include <cmath>
++#include <memory>
++#include <string>
++#include <thread>
++
++#include <SDL.h>
++#include <glad/glad.h>
++
++#include "common/file_util.h"
++#include "common/logging/backend.h"
++#include "common/logging/log.h"
++#include "common/param_package.h"
++#include "common/settings.h"
++#include "core/core.h"
++#include "core/frontend/emu_window.h"
++#include "core/frontend/input.h"
++#include "core/hle/service/service.h"
++#include "core/loader/loader.h"
++#include "video_core/gpu.h"
++#include "video_core/renderer_base.h"
++#include "video_core/rasterizer_interface.h"
++
++namespace {
++
++// The 3DS buttons, by the Settings::NativeButton they feed.
++constexpr int kButtons = Settings::NativeButton::NumButtons;
++std::array<std::atomic<bool>, kButtons> s_buttons{};
++std::array<std::atomic<float>, 2> s_stick_x{}, s_stick_y{};
++
++class PcButton final : public Input::ButtonDevice {
++public:
++    explicit PcButton(int b) : button{b} {}
++    bool GetStatus() const override { return s_buttons[button].load(std::memory_order_relaxed); }
++
++private:
++    int button;
++};
++
++class PcAnalog final : public Input::AnalogDevice {
++public:
++    explicit PcAnalog(int a) : analog{a} {}
++    std::tuple<float, float> GetStatus() const override {
++        return {s_stick_x[analog].load(std::memory_order_relaxed), s_stick_y[analog].load(std::memory_order_relaxed)};
++    }
++
++private:
++    int analog;
++};
++
++class PcMotion final : public Input::MotionDevice {
++public:
++    std::tuple<Common::Vec3<float>, Common::Vec3<float>> GetStatus() const override {
++        return {Common::Vec3<float>{0.f, -1.f, 0.f}, Common::Vec3<float>{}}; // (at rest, screen up)
++    }
++};
++
++class PcButtonFactory final : public Input::Factory<Input::ButtonDevice> {
++public:
++    std::unique_ptr<Input::ButtonDevice> Create(const Common::ParamPackage& p) override {
++        return std::make_unique<PcButton>(std::clamp(p.Get("button", 0), 0, kButtons - 1));
++    }
++};
++class PcAnalogFactory final : public Input::Factory<Input::AnalogDevice> {
++public:
++    std::unique_ptr<Input::AnalogDevice> Create(const Common::ParamPackage& p) override {
++        return std::make_unique<PcAnalog>(std::clamp(p.Get("analog", 0), 0, 1));
++    }
++};
++class PcMotionFactory final : public Input::Factory<Input::MotionDevice> {
++public:
++    std::unique_ptr<Input::MotionDevice> Create(const Common::ParamPackage&) override {
++        return std::make_unique<PcMotion>();
++    }
++};
++
++std::string Param(const char* key, int value) {
++    return Common::ParamPackage{{"engine", "fulldex"}, {key, std::to_string(value)}}.Serialize();
++}
++
++// A context that shares with the one current when it is made, drawing to a hidden window of its own:
++// under EGL (Wayland) one surface cannot be current in two threads, so none is shared.
++class SharedContext final : public Frontend::GraphicsContext {
++public:
++    SharedContext() {
++        SDL_Window* prev_window = SDL_GL_GetCurrentWindow();
++        SDL_GLContext previous = SDL_GL_GetCurrentContext();
++        window = SDL_CreateWindow("", 0, 0, 1, 1, SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
++        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
++        if (window) context = SDL_GL_CreateContext(window);
++        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
++        if (!context) LOG_CRITICAL(Frontend, "Shared context: {}", SDL_GetError());
++        SDL_GL_MakeCurrent(prev_window, previous); // (creating one makes it current)
++    }
++    ~SharedContext() override {
++        if (context) SDL_GL_DeleteContext(context);
++        if (window) SDL_DestroyWindow(window);
++    }
++    void MakeCurrent() override {
++        if (SDL_GL_MakeCurrent(window, context) != 0) LOG_CRITICAL(Frontend, "MakeCurrent: {}", SDL_GetError());
++    }
++    void DoneCurrent() override { SDL_GL_MakeCurrent(window, nullptr); }
++
++private:
++    SDL_Window* window{};
++    SDL_GLContext context{};
++};
++
++// An SDL window with an OpenGL context, as the core's EmuWindow.
++class PcWindow final : public Frontend::EmuWindow {
++public:
++    PcWindow() : EmuWindow{false} {
++        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
++        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
++        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
++        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
++        window = SDL_CreateWindow("Pokemon Fulldex - 3DS", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 960,
++                                  SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
++        if (!window) { LOG_CRITICAL(Frontend, "SDL_CreateWindow: {}", SDL_GetError()); return; }
++        context = SDL_GL_CreateContext(window);
++        if (!context) { LOG_CRITICAL(Frontend, "SDL_GL_CreateContext: {}", SDL_GetError()); return; }
++        if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(SDL_GL_GetProcAddress))) {
++            LOG_CRITICAL(Frontend, "gladLoadGLLoader failed");
++            return;
++        }
++        SDL_GL_SetSwapInterval(1);
++        // This (main) thread keeps the window's own context and presents with it; the emulation
++        // thread draws with a context that shares with it (the core's), as the Qt frontend does.
++        core = std::make_unique<SharedContext>();
++        window_info.type = Frontend::WindowSystemType::X11;
++        window_info.render_surface = window;
++        int w = 0, h = 0;
++        SDL_GL_GetDrawableSize(window, &w, &h);
++        UpdateCurrentFramebufferLayout(w, h);
++        LOG_INFO(Frontend, "Window {}x{}, layout {}x{}", w, h, GetFramebufferLayout().width, GetFramebufferLayout().height);
++        valid = true;
++    }
++    ~PcWindow() override {
++        core.reset();
++        if (context) SDL_GL_DeleteContext(context);
++        if (window) SDL_DestroyWindow(window);
++    }
++
++    bool Valid() const { return valid; }
++    // (What the core calls: the emulation thread's context.)
++    void MakeCurrent() override { core->MakeCurrent(); }
++    void DoneCurrent() override { core->DoneCurrent(); }
++    // (The shader cache loader makes and releases contexts on this thread: put ours back after.)
++    void SaveContext() override { saved_window = SDL_GL_GetCurrentWindow(); saved = SDL_GL_GetCurrentContext(); }
++    void RestoreContext() override { SDL_GL_MakeCurrent(saved_window, saved); }
++    void SwapBuffers() override {} // (frames go through the mailbox: Present)
++    void PollEvents() override {}  // (the main thread does)
++
++    // Main thread: shows the frame the core finished last.
++    void Present(Core::System& system) {
++        SDL_GL_MakeCurrent(window, context);
++        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
++        system.GPU().Renderer().TryPresent(100, false);
++        SDL_GL_SwapWindow(window);
++    }
++    std::unique_ptr<Frontend::GraphicsContext> CreateSharedContext() const override {
++        return std::make_unique<SharedContext>();
++    }
++    bool IsGLES() override { return false; }
++
++    // Main thread: the window's size and the mouse as the bottom screen's touch.
++    void Resized() {
++        int w = 0, h = 0;
++        SDL_GL_GetDrawableSize(window, &w, &h);
++        if (w > 0 && h > 0) UpdateCurrentFramebufferLayout(w, h);
++    }
++    void Mouse(const SDL_Event& e) {
++        int ww = 0, wh = 0, dw = 0, dh = 0;
++        SDL_GetWindowSize(window, &ww, &wh);
++        SDL_GL_GetDrawableSize(window, &dw, &dh);
++        const float sx = ww ? float(dw) / ww : 1.f, sy = wh ? float(dh) / wh : 1.f;
++        if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) TouchPressed(unsigned(e.button.x * sx), unsigned(e.button.y * sy));
++        else if (e.type == SDL_MOUSEBUTTONUP && e.button.button == SDL_BUTTON_LEFT) TouchReleased();
++        else if (e.type == SDL_MOUSEMOTION && (e.motion.state & SDL_BUTTON_LMASK)) TouchMoved(unsigned(e.motion.x * sx), unsigned(e.motion.y * sy));
++    }
++
++private:
++    SDL_Window* window{};
++    SDL_GLContext context{}, saved{};
++    SDL_Window* saved_window{};
++    std::unique_ptr<SharedContext> core;
++    bool valid{};
++};
++
++// Keyboard and the first game controller, as the 3DS's buttons and sticks.
++void ReadInput(SDL_GameController* pad) {
++    const Uint8* k = SDL_GetKeyboardState(nullptr);
++    auto key = [&](SDL_Scancode s) { return k[s] != 0; };
++    auto btn = [&](SDL_GameControllerButton b) { return pad && SDL_GameControllerGetButton(pad, b); };
++    auto axis = [&](SDL_GameControllerAxis a) { return pad ? SDL_GameControllerGetAxis(pad, a) / 32767.f : 0.f; };
++    namespace NB = Settings::NativeButton;
++    s_buttons[NB::A] = key(SDL_SCANCODE_X) || btn(SDL_CONTROLLER_BUTTON_B);
++    s_buttons[NB::B] = key(SDL_SCANCODE_Z) || btn(SDL_CONTROLLER_BUTTON_A);
++    s_buttons[NB::X] = key(SDL_SCANCODE_S) || btn(SDL_CONTROLLER_BUTTON_Y);
++    s_buttons[NB::Y] = key(SDL_SCANCODE_A) || btn(SDL_CONTROLLER_BUTTON_X);
++    s_buttons[NB::Up] = key(SDL_SCANCODE_UP) || btn(SDL_CONTROLLER_BUTTON_DPAD_UP);
++    s_buttons[NB::Down] = key(SDL_SCANCODE_DOWN) || btn(SDL_CONTROLLER_BUTTON_DPAD_DOWN);
++    s_buttons[NB::Left] = key(SDL_SCANCODE_LEFT) || btn(SDL_CONTROLLER_BUTTON_DPAD_LEFT);
++    s_buttons[NB::Right] = key(SDL_SCANCODE_RIGHT) || btn(SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
++    s_buttons[NB::L] = key(SDL_SCANCODE_Q) || btn(SDL_CONTROLLER_BUTTON_LEFTSHOULDER);
++    s_buttons[NB::R] = key(SDL_SCANCODE_W) || btn(SDL_CONTROLLER_BUTTON_RIGHTSHOULDER);
++    s_buttons[NB::Start] = key(SDL_SCANCODE_RETURN) || btn(SDL_CONTROLLER_BUTTON_START);
++    s_buttons[NB::Select] = key(SDL_SCANCODE_BACKSPACE) || btn(SDL_CONTROLLER_BUTTON_BACK);
++    s_buttons[NB::ZL] = axis(SDL_CONTROLLER_AXIS_TRIGGERLEFT) > 0.5f;
++    s_buttons[NB::ZR] = axis(SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > 0.5f;
++    auto stick = [](float v) { return std::fabs(v) < 0.2f ? 0.f : v; };
++    float lx = stick(axis(SDL_CONTROLLER_AXIS_LEFTX)), ly = stick(-axis(SDL_CONTROLLER_AXIS_LEFTY));
++    float rx = stick(axis(SDL_CONTROLLER_AXIS_RIGHTX)), ry = stick(-axis(SDL_CONTROLLER_AXIS_RIGHTY));
++    s_stick_x[0] = lx; s_stick_y[0] = ly; s_stick_x[1] = rx; s_stick_y[1] = ry;
++}
++
++} // namespace
++
++// Plays rom until the window is closed or Escape is pressed. userDir: Dekopon's folder (with a
++// trailing slash). Returns 0 when the game ran, else non-zero.
++int DekoponPcPlay(const char* rom, const char* userDir) {
++    FileUtil::SetUserPath(userDir);
++    Common::Log::Initialize();
++    Common::Log::Start();
++    Common::Log::Filter filter;
++    filter.ParseFilterString("*:Info");
++    Common::Log::SetGlobalFilter(filter);
++
++    Input::RegisterFactory<Input::ButtonDevice>("fulldex", std::make_shared<PcButtonFactory>());
++    Input::RegisterFactory<Input::AnalogDevice>("fulldex", std::make_shared<PcAnalogFactory>());
++    Input::RegisterFactory<Input::MotionDevice>("fulldex", std::make_shared<PcMotionFactory>());
++    auto& profile = Settings::values.current_input_profile;
++    profile.name = "Pokemon Fulldex";
++    profile.buttons.fill("engine:null");
++    for (int b = 0; b < kButtons; b++) profile.buttons[b] = Param("button", b);
++    profile.analogs[Settings::NativeAnalog::CirclePad] = Param("analog", 0);
++    profile.analogs[Settings::NativeAnalog::CStick] = Param("analog", 1);
++    profile.motion_device = Common::ParamPackage{{"engine", "fulldex"}}.Serialize();
++    profile.touch_device = "engine:emu_window";
++    profile.use_touchpad = false;
++    profile.use_touch_from_button = false;
++    // The core expects every known service module to have an explicit setting and crashes if not.
++    for (const auto& service_module : Service::service_module_map)
++        Settings::values.lle_modules.emplace(service_module.name, false);
++    Settings::values.graphics_api = Settings::GraphicsAPI::OpenGL;
++    Settings::values.use_gles = false;
++
++    if (SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) {
++        LOG_CRITICAL(Frontend, "SDL_Init: {}", SDL_GetError());
++        return 2;
++    }
++    PcWindow window;
++    if (!window.Valid()) return 3;
++    SDL_GameController* pad = nullptr;
++    for (int i = 0; i < SDL_NumJoysticks() && !pad; i++)
++        if (SDL_IsGameController(i)) pad = SDL_GameControllerOpen(i);
++
++    std::atomic<bool> stop{false}, loaded{false};
++    std::string path = rom;
++    std::thread emu([&] {
++        auto& system = Core::System::GetInstance();
++        window.MakeCurrent();
++        const auto result = system.Load(window, path);
++        if (result != Core::System::ResultStatus::Success) {
++            LOG_CRITICAL(Frontend, "Failed to load '{}' (error {})", path, static_cast<int>(result));
++            window.DoneCurrent();
++            stop = true;
++            return;
++        }
++        loaded = true;
++        u64 program_id = 0;
++        system.GetAppLoader().ReadProgramId(program_id);
++        system.GPU().ApplyPerProgramSettings(program_id);
++        system.GPU().Renderer().Rasterizer()->LoadDefaultDiskResources(
++            stop, [](VideoCore::LoadCallbackStage, std::size_t, std::size_t, const std::string&) {});
++        LOG_INFO(Frontend, "Emulation started (program id {:016X})", program_id);
++        while (!stop) {
++            if (system.RunLoop() != Core::System::ResultStatus::Success) break;
++        }
++        system.Shutdown();
++        window.DoneCurrent();
++        stop = true;
++    });
++
++    while (!stop) {
++        SDL_Event e;
++        while (SDL_PollEvent(&e)) {
++            if (e.type == SDL_QUIT || (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)) stop = true;
++            else if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) window.Resized();
++            else window.Mouse(e);
++        }
++        ReadInput(pad);
++        if (loaded && Core::System::GetInstance().IsPoweredOn()) window.Present(Core::System::GetInstance());
++        else SDL_Delay(8);
++    }
++    emu.join();
++    if (pad) SDL_GameControllerClose(pad);
++    return loaded ? 0 : 1;
++}
+diff --git a/src/citra_switch/CMakeLists.txt b/src/citra_switch/CMakeLists.txt
+index 247f29f..3b3c58a 100644
+--- a/src/citra_switch/CMakeLists.txt
++++ b/src/citra_switch/CMakeLists.txt
+@@ -3,7 +3,13 @@
+ enable_language(ASM)
+ 
+ # Dekopon frontend
+-add_executable(citra_switch
++if (DEKOPON_EMBED)
++    add_library(citra_switch STATIC)
++    target_compile_definitions(citra_switch PRIVATE DEKOPON_EMBEDDED)
++else()
++    add_executable(citra_switch)
++endif()
++target_sources(citra_switch PRIVATE
+     amiibo_convert.cpp
+     amiibo_convert.h
+     amiibo_reader.cpp
+@@ -28,7 +34,6 @@ add_executable(citra_switch
+     # The exception entry stub must be a strong symbol in the executable itself so the linker picks
+     # it over libnx's weak __libnx_exception_entry.
+     horizon_exception.cpp
+-    horizon_exception_entry.S
+     horizon_exception_entry.h
+     horizon_sys_stubs.cpp
+     input.cpp
+@@ -52,6 +57,10 @@ add_executable(citra_switch
+     usb_storage.h
+ )
+ 
++if (NOT DEKOPON_EMBED)
++    target_sources(citra_switch PRIVATE horizon_exception_entry.S)
++endif()
++
+ if (NOT ENABLE_VULKAN)
+     target_sources(citra_switch PRIVATE horizon_libc_compat.cpp)
+ endif()
+@@ -106,6 +115,15 @@ if (ENABLE_VULKAN)
+     target_link_libraries(citra_switch PRIVATE nxvk)
+ endif()
+ 
++if (DEKOPON_EMBED)
++    # A stand-in program that only exists so the build prints the exact link line (libraries, order,
++    # flags) for the host program (Pokemon Fulldex) to repeat.
++    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/embed_probe.cpp" "int DekoponMain(int, char**);\nint main(int c, char** v) { return DekoponMain(c, v); }\n")
++    add_executable(dekopon_embed_probe "${CMAKE_CURRENT_BINARY_DIR}/embed_probe.cpp")
++    target_link_libraries(dekopon_embed_probe PRIVATE citra_switch)
++    return()
++endif()
++
+ nx_generate_nacp(OUTPUT dekopon.nacp
+     NAME "Dekopon"
+     AUTHOR "Azahar Team \& PalindromicBreadLoaf"
+diff --git a/src/citra_switch/citra_switch.cpp b/src/citra_switch/citra_switch.cpp
+index b30b8d6..0a56f23 100644
+--- a/src/citra_switch/citra_switch.cpp
++++ b/src/citra_switch/citra_switch.cpp
+@@ -22,10 +22,12 @@ namespace Common {
+ void StopAllThreadWorkers();
+ }
+ 
++#ifndef DEKOPON_EMBEDDED
+ extern "C" {
+ u32 __nx_applet_type = AppletType_Application;
+ size_t __nx_heap_size = 0;
+ }
++#endif
+ 
+ namespace {
+ 
+@@ -326,14 +328,32 @@ void RunGame(PadState& pad, const std::string& rom) {
+ 
+ } // namespace
+ 
++#ifdef DEKOPON_EMBEDDED
++// Called by the host program (Pokemon Fulldex) in place of main(): plays argv[1] and returns.
++// These live in objects of this library that nothing else names: referencing them here makes the
++// host program's link keep them (the exception dispatch, and the HarfBuzz stand-ins FreeType needs).
++extern "C" bool HorizonExceptionDispatch(void*);
++extern "C" void* hb_blob_create(const char*, unsigned, int, void*, void*);
++extern "C" int getentropy(void*, std::size_t); // (horizon_sys_stubs.cpp)
++__attribute__((used)) static void* const kKeepLinked[] = {reinterpret_cast<void*>(&HorizonExceptionDispatch),
++                                                    reinterpret_cast<void*>(&hb_blob_create),
++                                                    reinterpret_cast<void*>(&getentropy)};
++int DekoponMain(int argc, char* argv[]) {
++    [[maybe_unused]] volatile void* keep = kKeepLinked[0];
++#else
+ int main(int argc, char* argv[]) {
++#endif
+     SwitchFrontend::SetUpdaterExecutablePath(argc > 0 && argv[0] != nullptr ? argv[0] : "");
+     const bool have_socket = R_SUCCEEDED(socketInitializeDefault());
+     if (have_socket) {
+         nxlinkStdio();
+     }
+     // Mount the embedded romfs for deko3D shaders
++#ifdef DEKOPON_EMBEDDED
++    const bool have_romfs = false; // (the host program has its own romfs)
++#else
+     const bool have_romfs = R_SUCCEEDED(romfsInit());
++#endif
+     if (!have_romfs) {
+         std::printf("Warning: romfsInit() failed.\n");
+     }
+diff --git a/src/citra_switch/horizon_exception.cpp b/src/citra_switch/horizon_exception.cpp
+index cd153e1..ce8da77 100644
+--- a/src/citra_switch/horizon_exception.cpp
++++ b/src/citra_switch/horizon_exception.cpp
+@@ -153,7 +153,12 @@ extern "C" bool HorizonExceptionDispatch(ThreadExceptionDump* ctx) {
+     return true;
+ }
+ 
++#ifdef DEKOPON_EMBEDDED
++// (The host program owns libnx's handler and calls HorizonExceptionDispatch from it.)
++extern "C" void DekoponCrashHandler(ThreadExceptionDump* ctx) {
++#else
+ extern "C" void __libnx_exception_handler(ThreadExceptionDump* ctx) {
++#endif
+     BuildReport(ctx);
+     WriteReportToSd();
+     write(STDERR_FILENO, s_report, s_report_len);

@@ -27,6 +27,7 @@
 #include "controls.h"
 #ifdef SSR_GBA
 #include <map>
+#include "n3ds_games.h" // 3DS games: played by Dekopon
 #include "gba_games.h" // Pokemon GBA Widescreen, built in: its GBA games (CMakeLists.txt, SSR_GBA_DIR)
 #include "gba_ra.h"    // RetroAchievements for those games, the same account as the DS games
 #endif
@@ -88,6 +89,11 @@ bool RomfsReady()
 // build's).
 bool Playable(const Launcher::Game& g)
 {
+#ifdef SSR_DEKOPON
+    if (g.platform == Launcher::N3DS) return !g.comingSoon; // (Dekopon is built in)
+#else
+    if (g.platform == Launcher::N3DS) return !g.comingSoon && N3dsGames::Installed();
+#endif
     if (g.platform == Launcher::GBA) return true; // (any GBA game plays, with widescreen or without)
     if (!g.known) return false;
     if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE")) return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
@@ -652,6 +658,7 @@ std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
         ownFolder |= games.size() > before;
     }
 #endif
+    N3dsGames::AddAll(dir, games);
 #endif
     Launcher::AddComingSoon(games);
     Launcher::Sort(games);
@@ -905,6 +912,39 @@ bool Start(int& argc, char**& argv)
             const std::string cmd = g_self.find(' ') == std::string::npos ? g_self : "\"" + g_self + "\"";
             envSetNextLoad(g_self.c_str(), cmd.c_str());
         }
+        return false;
+    }
+#endif
+    if (games[chosen].comingSoon)
+    {
+        // (Only a game on its way in the list, no ROM found: nothing to play.)
+        ShowMessage("  No game found. Copy your ROMs into\n  " + romsDir);
+        return false;
+    }
+#ifdef SSR_DEKOPON
+    // A 3DS game (chosen in the list, which started the program again for it): played by Dekopon
+    // (Azahar for the Switch), built in; then the program starts again for the list, as for a GBA
+    // game. It runs before anything of this program's own graphics is started, as both use the GPU.
+    if (games[chosen].platform == Launcher::N3DS)
+    {
+        fprintf(stderr, "[switch] 3DS: %s (Dekopon, built in)\n", games[chosen].rom.c_str());
+        std::string rom = games[chosen].rom, self = g_self.empty() ? "pokemon-ds-wide" : g_self;
+        char* av[] = { self.data(), rom.data(), nullptr };
+        DekoponMain(2, av);
+        if (!g_self.empty() && envHasNextLoad())
+        {
+            const std::string cmd = g_self.find(' ') == std::string::npos ? g_self : "\"" + g_self + "\"";
+            envSetNextLoad(g_self.c_str(), cmd.c_str());
+        }
+        return false;
+    }
+#else
+    if (games[chosen].platform == Launcher::N3DS)
+    {
+        // Dekopon is not built in: its own program is started with the ROM.
+        const std::string cmd = "\"" + N3dsGames::DekoponPath() + "\" \"" + games[chosen].rom + "\"";
+        const Result rc = envSetNextLoad(N3dsGames::DekoponPath().c_str(), cmd.c_str());
+        fprintf(stderr, "[switch] 3DS game %s: Dekopon (0x%x)\n", games[chosen].rom.c_str(), (unsigned)rc);
         return false;
     }
 #endif

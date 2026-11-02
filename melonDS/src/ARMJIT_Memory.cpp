@@ -1799,8 +1799,13 @@ void ARM_RestoreExceptionDump(ThreadExceptionDump* ctx, u64 pc) __attribute__((n
 alignas(16) u8 __nx_exception_stack[0x10000];
 u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
 
+// Dekopon (built in, 3DS games) handles its own fast-memory faults; absent when it is not linked.
+extern "C" bool HorizonExceptionDispatch(ThreadExceptionDump* ctx) __attribute__((weak));
+
 void __libnx_exception_handler(ThreadExceptionDump* ctx)
 {
+    if (HorizonExceptionDispatch && HorizonExceptionDispatch(ctx))
+        ARM_RestoreExceptionDump(ctx, ctx->pc.x);
     if (melonDS::SwitchProbeState == 1 && ctx->far.x == melonDS::SwitchProbeAddr)
     {
         melonDS::SwitchProbeState = 2;

@@ -56,6 +56,10 @@
 #ifdef SSR_UPDATER
 #include "updater.h"
 #endif
+#ifdef SSR_DEKOPON_PC
+#include "n3ds_games.h" // 3DS games: played by Dekopon's core (citra_pc)
+int DekoponPcPlay(const char* rom, const char* userDir);
+#endif
 #ifdef SSR_GBA
 #include "gba_games.h" // Pokemon GBA Widescreen, built in: its GBA games (CMakeLists.txt, SSR_GBA_DIR)
 #include "gba_ra.h"    // RetroAchievements for those games, the same account as the DS games
@@ -291,6 +295,9 @@ void ExtractFuncs(const Folders& fo)
 bool Playable(const Folders& fo, const Launcher::Game& g)
 {
     if (g.platform == Launcher::GBA) return true; // (any GBA game plays, with widescreen or without)
+#ifdef SSR_DEKOPON_PC
+    if (g.platform == Launcher::N3DS) return !g.comingSoon;
+#endif
     if (!g.known) return false;
     if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE")) return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
     return Exists(fo.funcs + "/" + g.code + ".txt");
@@ -301,6 +308,7 @@ std::string PrepareLaunch(const Launcher::Game& game)
     FILE* rom = fopen(game.rom.c_str(), "rb");
     if (!rom) return "ROM IS MISSING OR CANNOT BE READ";
     fclose(rom);
+    if (game.platform == Launcher::N3DS) return ""; // (Dekopon keeps a 3DS game's saves in its own folder)
     if (game.saveName.empty()) return "THIS GAME HAS NO SAVE FILE NAME";
     std::error_code ec;
     std::filesystem::create_directories(game.folder, ec);
@@ -456,7 +464,13 @@ std::vector<Launcher::Game> FindGames(const Folders& fo, std::map<std::string, s
             fprintf(stderr, "[launcher] GBA games: %zu in %s\n", gbaSeen, fo.roms.c_str());
     }
 #endif
+#ifdef SSR_DEKOPON_PC
+    // The 3DS games: the roms folder (and the folders in it), and the app's folder.
+    N3dsGames::Add(fo.roms, games);
+    if (!fo.dir.empty() && fo.dir != fo.roms) N3dsGames::Add(fo.dir, games, 1);
+#endif
     Launcher::AddComingSoon(games);
+    if (!games.empty() && games.back().comingSoon)
     {
         Launcher::Game& g = games.back();
         auto it = artCache.find("coming-soon:" + g.code);
@@ -1864,6 +1878,27 @@ bool Start(int& argc, char**& argv)
 #else
         IosOrientGame();
 #endif
+#endif
+#ifdef SSR_DEKOPON_PC
+        // A 3DS game: played here by Dekopon's core (the same one as on the Switch), then the list again.
+        if (games[chosen].platform == Launcher::N3DS)
+        {
+            const std::string rom = games[chosen].rom;
+            if (FILE* f = fopen(lastPath.c_str(), "w"))
+            {
+                fprintf(f, "%s\n", rom.c_str());
+                fclose(f);
+            }
+            const std::string user = fo.dir + "/dekopon/";
+            fprintf(stderr, "[launcher] 3DS: %s (Dekopon, data in %s)\n", rom.c_str(), user.c_str());
+            DekoponPcPlay(rom.c_str(), user.c_str());
+            directGame = -1;
+            games = FindGames(fo, artCache);
+            chosen = 0;
+            for (size_t i = 0; i < games.size(); i++)
+                if (games[i].rom == rom) chosen = (int)i;
+            continue;
+        }
 #endif
 #ifdef SSR_GBA
         // A GBA game: played here (Pokemon GBA Widescreen, built in), then the list again.

@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **3DS games in the game list** (Switch and Linux): the ROMs (.3ds, .cci, .cxi, .cia) anywhere in the `roms` folder appear in the 3DS tab and are played by Dekopon's core (the Switch's Azahar), built into the program (`tools/dekopon/`). On Linux it draws with OpenGL in its own window (Escape closes it); its data goes in a `dekopon` folder beside the program. Omega Ruby's COMING SOON tile shows only while there is no 3DS ROM.
+
 - Android launcher defaults to landscape with rotation locked, follows device orientation with auto-rotate enabled, and uses larger settings text in both orientations with wrapped values.
 
 - Android DS/GBA FPS counters sit inward from screen edges to avoid rounded corners and camera cutouts.

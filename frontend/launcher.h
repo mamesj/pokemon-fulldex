@@ -70,6 +70,9 @@ constexpr int Art = 224;
 // Omega Ruby on the 3DS (its picture as any game's: icons/ECRA.jpg, or SSR_PC_ART's ECRA.jpg).
 inline void AddComingSoon(std::vector<Game>& games)
 {
+    // (Not once there is a 3DS ROM to play: the 3DS tab is then no longer waiting for one.)
+    for (const Game& other : games)
+        if (other.platform == N3DS) return;
     Game g;
     g.platform = N3DS;
     g.code = "ECRA";

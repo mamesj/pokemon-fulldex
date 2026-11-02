@@ -236,6 +236,16 @@ elseif(SSR_SWITCH)
         message(STATUS "deko3D or uam not found (both come with switch-dev): built without the deko3D test")
     endif()
 
+    # Dekopon (the Switch's Azahar), built in so that the 3DS games play like the others: its libraries
+    # as a CMake file listing them in link order (SSR_DEKOPON_LIBS_FILE, made from Dekopon's build
+    # with DEKOPON_EMBED=ON; see frontend/n3ds_games.h).
+    if(SSR_DEKOPON_LIBS_FILE)
+        include("${SSR_DEKOPON_LIBS_FILE}")
+        target_compile_definitions(ssrecomp PRIVATE SSR_DEKOPON)
+        target_link_libraries(ssrecomp PRIVATE ${SSR_DEKOPON_LIBS})
+        message(STATUS "Dekopon built in: ${SSR_DEKOPON_LIBS_FILE}")
+    endif()
+
     find_program(SSR_NACPTOOL nacptool HINTS "${DEVKITPRO}/tools/bin" NO_CMAKE_FIND_ROOT_PATH)
     find_program(SSR_ELF2NRO elf2nro HINTS "${DEVKITPRO}/tools/bin" NO_CMAKE_FIND_ROOT_PATH)
     if(NOT SSR_NACPTOOL OR NOT SSR_ELF2NRO)
@@ -320,6 +330,15 @@ else()
         target_sources(ssrecomp PRIVATE frontend/updater.cpp)
         set_source_files_properties(frontend/updater.cpp PROPERTIES COMPILE_DEFINITIONS "SSR_BUILT_AT=${SSR_BUILT_AT}")
         target_compile_definitions(ssrecomp PRIVATE SSR_UPDATER)
+    endif()
+    # Dekopon's core (the 3DS games, as on the Switch): its libraries, listed in link order by a CMake file
+    # made from Dekopon's own build (citra_pc, DEKOPON_PC=ON; see frontend/n3ds_games.h).
+    set(SSR_DEKOPON_PC_LIBS_FILE "" CACHE FILEPATH "Dekopon's PC libraries, as a CMake file, to play 3DS games too")
+    if(SSR_DEKOPON_PC_LIBS_FILE AND SSR_PC_ALL_GAMES)
+        include("${SSR_DEKOPON_PC_LIBS_FILE}")
+        target_compile_definitions(ssrecomp PRIVATE SSR_DEKOPON_PC)
+        target_link_libraries(ssrecomp PRIVATE ${SSR_DEKOPON_PC_LIBS})
+        message(STATUS "Dekopon built in: ${SSR_DEKOPON_PC_LIBS_FILE}")
     endif()
     if(UNIX AND NOT APPLE AND SSR_PC_ALL_GAMES)
         # The Linux download carries its own SDL2 beside the program (tools/pc/build_all.sh),
