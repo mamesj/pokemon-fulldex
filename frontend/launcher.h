@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 
 #include "ui.h"
+#include "official_roms.h"
 // (JPEG and PNG pictures for the list: the program that draws it defines STB_IMAGE_IMPLEMENTATION
 // with STBI_ONLY_JPEG and STBI_ONLY_PNG before including this, in one file.)
 #include "thirdparty/stb_image.h"
@@ -35,8 +36,9 @@ inline void ModernText(Canvas& c, int x, int y, const std::string& text, int sca
 }
 
 // The consoles the list has games of, in the order its sections and tabs come in.
-enum Platform { DS, GBA, N3DS, PLATFORMS };
-inline const char* PlatformName(int p) { return p == DS ? "DS" : p == GBA ? "GBA" : "3DS"; }
+// (HACKS is a section, not a console: a DS or GBA game that is not an official dump, Game::hack.)
+enum Platform { DS, GBA, N3DS, HACKS, PLATFORMS };
+inline const char* PlatformName(int p) { return p == DS ? "DS" : p == GBA ? "GBA" : p == N3DS ? "3DS" : "ROM HACKS"; }
 // The tabs along the top: ALL (every section, each under its console's heading), then one per
 // console.
 constexpr int TABS = 1 + PLATFORMS;
@@ -61,7 +63,12 @@ struct Game
     std::string where;
     // A game on its way (AddComingSoon): its tile says so and it cannot be played.
     bool comingSoon = false;
+    // A DS or GBA ROM that is not an official dump (MarkHacks): listed under ROM HACKS, played as before.
+    bool hack = false;
 };
+
+// The list section a game is shown in.
+inline int Section(const Game& g) { return g.hack ? HACKS : g.platform; }
 
 // The size the larger pictures are kept at (the tiles of the list at 720 lines).
 constexpr int Art = 224;
@@ -404,11 +411,34 @@ inline void ScanFolder(const std::string& folder, std::vector<Game>& out, bool s
 inline void Sort(std::vector<Game>& games)
 {
     std::stable_sort(games.begin(), games.end(), [](const Game& a, const Game& b) {
+        if (Section(a) != Section(b)) return Section(a) < Section(b);
         if (a.platform != b.platform) return a.platform < b.platform;
         const int oa = Order(a.code), ob = Order(b.code);
         if (oa != ob) return oa < ob;
         return a.name < b.name;
     });
+}
+
+// Marks the DS games whose ROM is not an official dump (Official::Verified) as ROM hacks, so
+// that a hack of an official game (same game code, own name) is never listed as the original, and
+// says which console it is for under its tile. `folder` keeps the verification cache.
+inline void MarkHacks(std::vector<Game>& games, const std::string& folder)
+{
+    Official::Folder() = folder;
+    for (Game& g : games)
+    {
+        if (g.comingSoon || g.platform != DS) continue;
+        g.hack = !Official::Verified(g.rom);
+        if (!g.hack) continue;
+        if (g.where.empty()) g.where = "DS HACK";
+        // A DS hack keeps its own save: it has the original's game code, so the code's save name is the original's.
+        std::string stem = g.rom.substr(g.rom.find_last_of("/\\") + 1);
+        stem = stem.substr(0, stem.find_last_of('.'));
+        for (char& c : stem) c = isalnum((unsigned char)c) ? (char)tolower((unsigned char)c) : '-';
+        g.saveName = "hack-" + stem + ".sav";
+        struct stat st;
+        g.hasSave = stat((g.folder + "/" + g.saveName).c_str(), &st) == 0;
+    }
 }
 
 // The list's colours (ARGB): near-black with white text and red details, on the Switch and on a PC.
@@ -623,7 +653,7 @@ inline View MakeView(const Canvas& c, const std::vector<Game>& games, int tab)
         if (!InTab(p, tab)) continue;
         std::vector<int> mine;
         for (size_t i = 0; i < games.size(); i++)
-            if (games[i].platform == p) mine.push_back((int)i);
+            if (Section(games[i]) == p) mine.push_back((int)i);
         // (ALL: every console under its heading, also one without games yet.)
         if (tab == 0)
         {
@@ -760,7 +790,7 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
         const int y = top + h.y - scroll;
         if (h.empty)
         {
-            const std::string none = std::string("NO ") + PlatformName(h.platform) + " GAMES YET";
+            const std::string none = h.platform == HACKS ? "NO ROM HACKS YET" : std::string("NO ") + PlatformName(h.platform) + " GAMES YET";
             // (On its own tab: in the middle of the page.)
             if (tab != 0) c.Text((c.w - Canvas::TextWidth(none, s)) / 2, (top + bottom) / 2 - 4 * s, none, s, th.hint);
             else if (y >= top && y + 10 * s <= bottom) c.Text(grid.gx, y + 2 * s, none, s, th.hint);

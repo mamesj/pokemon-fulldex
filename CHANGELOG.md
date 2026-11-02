@@ -11,6 +11,9 @@
 
 - Android touch controls can be moved and resized in a paused layout editor, with save, cancel and reset. Layouts are stored separately for DS/GBA and each screen orientation.
 
+- **ROM HACKS tab** (next to 3DS): any DS ROM that is not an official dump is listed there, with its own save, so a hack of an official game is never mixed up with the original (nor does it overwrite its save). A ROM counts as official when the CRC32 of the file is in the built-in No-Intro list (`frontend/official_roms.h`) or in an `originals.txt` of good dumps beside the program; results are kept in `rom-verify.cache` (the first scan of a big DS ROM takes a few seconds). Put hacks in `roms/hacks` or anywhere in `roms`. (GBA hacks are not told apart yet.)
+
+- **Switch: UPSCALER in GRAPHICS (and the pause menu): AMD FSR 1 or NVIDIA Image Scaling (NIS)** bring the 3D world up to the screen when WORLD DETAIL is lower (288 / 384 / 540), instead of a plain stretch: SoulSilver, HeartGold, Platinum, Black, White, Black 2 and White 2. Needs an overclocked console (OC, such as sys-clk).
 - **LANGUAGE in the settings (DISPLAY): English or Spanish** for the game list, the settings page and the pause menu; Spanish's accented letters drawn in the menus' font.
 - Android: build both native libraries for 16 KB page-size compatibility, restore launcher textures after graphics-surface resets, fall back to software drawing if the graphics driver fails, and record early native loading in startup.log.
 

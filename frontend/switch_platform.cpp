@@ -610,6 +610,7 @@ std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
     std::vector<Launcher::Game> games;
     Launcher::Game g;
     ownFolder = true;
+Official::Folder() = dir; // (the cache of verified ROMs)
     if (Launcher::ReadGame(dir + "/rom.nds", dir, g)) return { g };
 #ifndef SSR_ALL_GAMES
     // (A one-game program: its own folder only, as always.)
@@ -653,6 +654,14 @@ std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
     }
 #endif
 #endif
+    // ROM hacks of the player's own (roms/hacks); any other ROM that is not an official dump is
+    // marked as a hack too, so that it is never listed as the original.
+    {
+        const size_t before = games.size();
+        Launcher::ScanFolder(dir + "/roms/hacks", games, false);
+        for (size_t i = before; i < games.size(); i++) games[i].folder = dir;
+    }
+    Launcher::MarkHacks(games, dir);
     Launcher::AddComingSoon(games);
     Launcher::Sort(games);
     // The same game in two folders (two ROMs, two saves): each says where it is.
