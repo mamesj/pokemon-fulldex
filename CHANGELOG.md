@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Switch: UPSCALER in GRAPHICS (and the pause menu): AMD FSR 1 or NVIDIA Image Scaling (NIS)** bring the 3D world up to the screen when WORLD DETAIL is lower (288 / 384 / 540), instead of a plain stretch: SoulSilver, HeartGold, Platinum, Black, White, Black 2 and White 2. Needs an overclocked console (OC, such as sys-clk).
 - Fix the iPhone and iPad launcher build so the hotfix can be packaged for iOS.
 
 - Keep the established Windows renderer and frame clock by default. The recovered Direct3D 11 display-pacing path measured about 53 FPS on a 240 Hz display where the earlier path sustained about 60 FPS; it remains available with SSR_DISPLAY_PACING=1 for further testing.
