@@ -25,6 +25,7 @@
 #include <mgba/core/serialize.h>
 
 #include "ui.h"
+#include "../../frontend/official_roms.h"
 
 extern "C" {
 #include "../third_party/pokedaisy/pk_wide.h"
@@ -68,7 +69,8 @@ void Describe(const std::string& path, ListGame& g)
         { "BPGE", "leafgreen", "POKEMON LEAFGREEN" },
     };
     for (const auto& e : english)
-        if (!strcmp(code, e.code))
+        // (Only an official dump has the English save: a hack of the game, with the same code, must not use or overwrite it.)
+        if (!strcmp(code, e.code) && Official::Verified(path))
         {
             g.key = e.key;
             g.name = e.name;

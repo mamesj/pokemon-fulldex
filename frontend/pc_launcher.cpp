@@ -390,6 +390,7 @@ std::vector<Launcher::Game> FindGames(const Folders& fo, std::map<std::string, s
 {
     std::vector<Launcher::Game> games;
     std::set<std::string> seen;
+    Official::Folder() = fo.dir.empty() ? fo.roms : fo.dir; // (the cache of verified ROMs: before gbawide names the games)
     for (const std::string& dir : { fo.roms, fo.dir })
     {
         if (dir.empty()) continue;
@@ -456,6 +457,18 @@ std::vector<Launcher::Game> FindGames(const Folders& fo, std::map<std::string, s
             fprintf(stderr, "[launcher] GBA games: %zu in %s\n", gbaSeen, fo.roms.c_str());
     }
 #endif
+    // ROM hacks of the player's own: ds/gba ROMs in roms/hacks (any ROM elsewhere that is not an
+    // official dump is a hack too: MarkHacks).
+    {
+        const std::string hacks = fo.roms + "/hacks";
+        const size_t before = games.size();
+        Launcher::ScanFolder(hacks, games, false);
+        for (size_t i = before; i < games.size(); i++) games[i].folder = fo.saves;
+#ifdef SSR_GBA
+        GbaGames::Add(hacks, fo.saves, games, artCache);
+#endif
+    }
+    Launcher::MarkHacks(games, fo.dir.empty() ? fo.roms : fo.dir);
     Launcher::AddComingSoon(games);
     {
         Launcher::Game& g = games.back();
@@ -577,11 +590,11 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
     if (const char* t = getenv("SSR_LIST_TAB")) tab = std::max(0, std::min(Launcher::TABS - 1, atoi(t)));
     // (The game chosen last, if it is in that tab; else the tab's first. The games are in the
     // view's order.)
-    if (selected < 0 || selected >= (int)games.size() || !Launcher::InTab(games[selected].platform, tab))
+    if (selected < 0 || selected >= (int)games.size() || !Launcher::InTab(Launcher::Section(games[selected]), tab))
     {
         selected = -1;
         for (size_t i = 0; i < games.size() && selected < 0; i++)
-            if (Launcher::InTab(games[i].platform, tab)) selected = (int)i;
+            if (Launcher::InTab(Launcher::Section(games[i]), tab)) selected = (int)i;
     }
     // L and R (Q and E, or a controller's shoulder buttons; a tap on a tab): the next tab, keeping
     // the chosen game if it is in it.

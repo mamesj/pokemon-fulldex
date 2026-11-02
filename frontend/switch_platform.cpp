@@ -647,6 +647,7 @@ std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
         for (Launcher::Game& x : list)
             if (x.platform == Launcher::DS) x.hasSave = stat(SavePath(x).c_str(), &st) == 0;
     };
+    Official::Folder() = dir; // (the cache of verified ROMs)
     MoveSavesIn(dir);
     if (Launcher::ReadGame(dir + "/rom.nds", dir, g))
     {
@@ -699,6 +700,18 @@ std::vector<Launcher::Game> FindGames(const std::string& dir, bool& ownFolder)
     }
 #endif
 #endif
+    {
+        // ROM hacks of the player's own (roms/hacks); any other ROM that is not an official dump is
+        // marked as a hack too, so that it is never listed as the original.
+        const size_t before = games.size();
+        Launcher::ScanFolder(dir + "/roms/hacks", games, false);
+        for (size_t i = before; i < games.size(); i++) games[i].folder = dir;
+#ifdef SSR_GBA
+        std::map<std::string, std::vector<uint32_t>> art;
+        GbaGames::Add(dir + "/roms/hacks", dir + "/saves", games, art);
+#endif
+    }
+    Launcher::MarkHacks(games, dir);
     savesIn(games);
     Launcher::AddComingSoon(games);
     Launcher::Sort(games);
