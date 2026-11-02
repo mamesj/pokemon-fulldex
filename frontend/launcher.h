@@ -419,7 +419,7 @@ inline void Sort(std::vector<Game>& games)
     });
 }
 
-// Marks the DS games whose ROM is not an official dump (Official::Verified) as ROM hacks, so
+// Marks the DS, GBA and 3DS games whose ROM is not an official dump (Official::Verified) as ROM hacks, so
 // that a hack of an official game (same game code, own name) is never listed as the original, and
 // says which console it is for under its tile. `folder` keeps the verification cache.
 inline void MarkHacks(std::vector<Game>& games, const std::string& folder)
@@ -427,10 +427,11 @@ inline void MarkHacks(std::vector<Game>& games, const std::string& folder)
     Official::Folder() = folder;
     for (Game& g : games)
     {
-        if (g.comingSoon || g.platform != DS) continue;
+        if (g.comingSoon || (g.platform != DS && g.platform != GBA && g.platform != N3DS)) continue;
         g.hack = !Official::Verified(g.rom);
         if (!g.hack) continue;
-        if (g.where.empty()) g.where = "DS HACK";
+        if (g.where.empty()) g.where = std::string(PlatformName(g.platform)) + " HACK";
+        if (g.platform != DS) continue; // (a GBA hack keeps the GBA player's save naming, a 3DS one Dekopon's)
         // A DS hack keeps its own save: it has the original's game code, so the code's save name is the original's.
         std::string stem = g.rom.substr(g.rom.find_last_of("/\\") + 1);
         stem = stem.substr(0, stem.find_last_of('.'));

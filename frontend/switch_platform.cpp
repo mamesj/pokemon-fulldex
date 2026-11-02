@@ -660,6 +660,10 @@ Official::Folder() = dir; // (the cache of verified ROMs)
         const size_t before = games.size();
         Launcher::ScanFolder(dir + "/roms/hacks", games, false);
         for (size_t i = before; i < games.size(); i++) games[i].folder = dir;
+#ifdef SSR_GBA
+        std::map<std::string, std::vector<uint32_t>> art;
+        GbaGames::Add(dir + "/roms/hacks", dir + "/saves", games, art);
+#endif
     }
     Launcher::MarkHacks(games, dir);
     Launcher::AddComingSoon(games);

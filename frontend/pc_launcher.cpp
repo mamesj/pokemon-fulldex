@@ -464,6 +464,9 @@ std::vector<Launcher::Game> FindGames(const Folders& fo, std::map<std::string, s
         const size_t before = games.size();
         Launcher::ScanFolder(hacks, games, false);
         for (size_t i = before; i < games.size(); i++) games[i].folder = fo.saves;
+#ifdef SSR_GBA
+        GbaGames::Add(hacks, fo.saves, games, artCache);
+#endif
     }
     Launcher::MarkHacks(games, fo.dir.empty() ? fo.roms : fo.dir);
     Launcher::AddComingSoon(games);

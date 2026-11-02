@@ -1,6 +1,6 @@
 #pragma once
 // Tells the official Pokemon cartridges' ROMs from ROM hacks: a ROM is official when the CRC32 of
-// the whole file is one of the No-Intro dumps below (DS and GBA, every region), or one the player
+// the whole file is one of the No-Intro dumps below (DS, GBA and 3DS, every region), or one the player
 // lists in originals.txt (one hex CRC32 per line) beside the roms folder. A hack changes the file,
 // so its CRC is in neither. Hashing a 512 MB DS ROM takes seconds, so each result is kept in
 // rom-verify.cache (size, modified time, CRC) and a file is hashed again only when it changes.
@@ -11,6 +11,7 @@
 #include <map>
 #include <string>
 #include <sys/stat.h>
+#include <zlib.h>
 
 namespace Official
 {
@@ -236,6 +237,66 @@ inline bool KnownCrc(uint32_t crc)
     0xE2BEE619u, // Black (USA) [b] dump
     0xB979777Bu, // Edicion Blanca (Spain) [b] dump
     0x84E882FFu, // Edicion Oro HeartGold (Spain) alt dump
+    0x049F401Fu, // Minna no Pokemon Scramble (Japan)
+    0x0814CCCEu, // Pokemon Omega Ruby (USA) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0x09CB29CDu, // Pokemon Ultra Moon (USA) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x0C3FFCC2u, // Pocket Monsters Ultra Moon (Japan) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x0DF5C429u, // Pokemon Ultra Sun (Taiwan) (En,Ja,Fr,De,Es,It,Zh-Hant,Zh-Hans,Ko)
+    0x1A0FCC17u, // Pokemon Omega Ruby (Korea) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0x1A296A4Au, // Pokemon X (Korea) (En,Ja,Fr,De,Es,It,Ko)
+    0x2111C03Eu, // Pokemon Super Mystery Dungeon (USA)
+    0x21461F00u, // Super Pokemon Rumble (Europe) (En,Fr,De,Es,It)
+    0x24458147u, // Pokemon Fushigi no Dungeon - Magnagate to Mugendai Meikyuu (Japan)
+    0x24CD30EEu, // Pokemon Mystery Dungeon - Gates to Infinity (USA)
+    0x2821BE61u, // Pocket Monsters Ultra Sun (Korea)
+    0x2932C7CFu, // Pocket Monsters Moon (Korea)
+    0x2CE94CF7u, // Pokemon Art Academy (Korea)
+    0x2ECEBFD4u, // Pokemon Omega Ruby (Japan) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0x2FE2FFBFu, // Pokemon X (Europe) (En,Ja,Fr,De,Es,It,Ko)
+    0x381501EEu, // Pokemon Sun (Taiwan) (En,Ja,Fr,De,Es,It,Zh-Hant,Zh-Hans,Ko)
+    0x3CB171AEu, // Pokemon Y (Taiwan) (En,Ja,Fr,De,Es,It,Ko)
+    0x3D86DB16u, // Pokemon Rumble World (USA)
+    0x41E6BA59u, // Pokemon X (Japan) (En,Ja,Fr,De,Es,It,Ko) (Rev 1)
+    0x48074746u, // Pokemon Ultra Moon (Taiwan) (En,Ja,Fr,De,Es,It,Zh-Hant,Zh-Hans,Ko)
+    0x48D1AE80u, // Pokemon Moon (USA) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x4E221993u, // Pokemon Rumble Blast (USA)
+    0x5033217Fu, // Pokemon Ultra Sun (USA) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x52AF1862u, // Pocket Monsters Sun (Korea)
+    0x5C4780E8u, // Pokemon Sun (USA) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x5D9ED4D0u, // Pokemon Alpha Sapphire (Taiwan) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0x62664038u, // Pokemon Ultra Sun (Europe) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x6AACCD9Du, // Pokemon Chou Fushigi no Dungeon (Japan)
+    0x6B7F6056u, // Pocket Monsters Moon (Japan) (En,Ja,Fr,De,Es,It,Zh-Hant,Zh-Hans,Ko)
+    0x6BA61F98u, // Pokemon Y (USA) (En,Ja,Fr,De,Es,It,Ko)
+    0x6CD21DC8u, // Pokemon Rumble Blast (USA) (Rev 1)
+    0x6D4824F0u, // Super Pokemon Scramble (Japan)
+    0x6F6E19E0u, // Pokemon X (USA) (En,Ja,Fr,De,Es,It,Ko)
+    0x738CA169u, // Pokemon Alpha Sapphire (Europe) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0x74E8B1CEu, // Pokemon Sun (Europe) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x770F034Bu, // Pokemon Art Academy (USA) (En,Fr,Es) (Rev 2)
+    0x79283CD0u, // Pokemon Art Academy (Europe) (En,Fr,De,Es,It)
+    0x7AAE5740u, // Pocket Monsters Sun (Japan) (En,Ja,Fr,De,Es,It,Zh-Hant,Zh-Hans,Ko)
+    0x7F1B6D38u, // Pokemon Rumble World (Europe) (En,Fr,De,Es,It)
+    0x8116E538u, // Pokemon Moon (Europe) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0x8CA70744u, // Super Pokemon Rumble (Europe) (En,Fr,De,Es,It) (Rev 1)
+    0x900170B3u, // Pokemon Art Academy (Japan)
+    0xA07922E6u, // Pokemon Mystery Dungeon - Gates to Infinity (Europe) (En,Fr,De,Es,It)
+    0xA58CFE6Cu, // Pokemon Moon (Taiwan) (En,Ja,Fr,De,Es,It,Zh-Hant,Zh-Hans,Ko)
+    0xABB55CAFu, // Pokemon Super Mystery Dungeon (Europe) (En,Fr,De,Es,It)
+    0xAC5960AFu, // Pokemon Omega Ruby (Taiwan) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0xB2229D6Bu, // Pokemon X (Taiwan) (En,Ja,Fr,De,Es,It,Ko)
+    0xB59F5C68u, // Super Pokemon Scramble (Japan) (Rev 1)
+    0xBC356153u, // Pokemon Omega Ruby (Europe) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0xC2AE7E07u, // Pokemon Y (Europe) (En,Ja,Fr,De,Es,It,Ko)
+    0xCA8322F1u, // Pocket Monsters Ultra Sun (Japan) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0xD4DDA2E3u, // Pokemon Alpha Sapphire (USA) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0xDB75C44Bu, // Pocket Monsters Ultra Moon (Korea)
+    0xDFC10E37u, // Pokemon Y (Japan) (En,Ja,Fr,De,Es,It,Ko) (Rev 1)
+    0xE2207795u, // Super Pokemon Daegyeokdol (Korea)
+    0xE4F90C80u, // Pokemon Ultra Moon (Europe) (En,Ja,Fr,De,Es,It,Zh,Ko)
+    0xEBE8B2DBu, // Pokemon Alpha Sapphire (Korea) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
+    0xEC8C7E95u, // Pokemon Y (Korea) (En,Ja,Fr,De,Es,It,Ko)
+    0xFCA6E28Eu, // Pokemon Alpha Sapphire (Japan) (En,Ja,Fr,De,Es,It,Ko) (Rev 2)
     };
     for (uint32_t c : table)
         if (c == crc) return true;
@@ -244,19 +305,10 @@ inline bool KnownCrc(uint32_t crc)
 
 inline uint32_t Crc32(FILE* f)
 {
-    static uint32_t t[256];
-    if (!t[1])
-        for (uint32_t i = 0; i < 256; i++)
-        {
-            uint32_t c = i;
-            for (int k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320u ^ c >> 1 : c >> 1;
-            t[i] = c;
-        }
-    static unsigned char buf[1 << 16];
-    uint32_t crc = ~0u;
-    for (size_t n; (n = fread(buf, 1, sizeof buf, f)) > 0;)
-        for (size_t i = 0; i < n; i++) crc = t[(crc ^ buf[i]) & 0xFF] ^ crc >> 8;
-    return ~crc;
+    static unsigned char buf[1 << 20];
+    uLong crc = crc32(0L, Z_NULL, 0);
+    for (size_t n; (n = fread(buf, 1, sizeof buf, f)) > 0;) crc = crc32(crc, buf, (uInt)n);
+    return (uint32_t)crc;
 }
 
 // Where the results are kept, and the player's own list of good dumps (set by the launcher).
