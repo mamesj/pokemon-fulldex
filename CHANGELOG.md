@@ -3,6 +3,14 @@
 
 ## Unreleased
 
+- **Black 2 and White 2: battle questions keep their buttons** while waiting for an answer,
+  including switching Pokémon between opponents and choosing whether to continue after
+  fainting. The question stays full size, with its choices above it.
+
+- **Black, White, Black 2 and White 2: the Bag's messages stay readable** when selecting
+  or using an item, including teaching a TM. The item card moves below the message box
+  instead of covering its text, and includes the move's type, power, accuracy and PP.
+
 - Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
   and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,
   diamond-de.sav, ...). Japanese Diamond and Pearl are not supported yet.

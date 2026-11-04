@@ -2603,6 +2603,7 @@ int main(int argc, char** argv)
         int dexOpen = -1, dexApp = -1;
         int startContinue = -1, confirmDialog = -1, startMain = -1, intro = -1, nameEntry = -1;
         int battleList = -1, battleBag = -1, battleChoice = -1, battleYesNo = -1;
+        int battleYesNoPoll = -1;
         int setupSingle = -1, setupDouble = -1, setupTriple = -1, setupRotation = -1;
         int save = -1, saveWrite = -1;
         std::vector<int> levelUpWin; // the level-up window in a battle (BtlvCore_Wait*LevelUp*)
@@ -2652,6 +2653,8 @@ int main(int argc, char** argv)
         bw2.battleBag = bw2Find("BBagMain_Task");       // the Bag in a battle
         bw2.battleChoice = bw2Find("BChoiceMain_Task"); // a choice on the touch screen in a battle
         bw2.battleYesNo = bw2Find("BtlvInput_YesNoTask"); // YES / NO in a battle ("Use next Pokemon?")
+        // The opening task ends before the player answers. The poll lasts for the question.
+        bw2.battleYesNoPoll = bw2Find("BtlvCore_PollYesNo");
         bw2.setupSingle = bw2Find("BtlMain_SetupAloneSingle"); // which kind of battle starts
         bw2.setupDouble = bw2Find("BtlMain_SetupAloneDouble");
         bw2.setupTriple = bw2Find("BtlMain_SetupAloneTriple");
@@ -3152,10 +3155,9 @@ int main(int argc, char** argv)
             // The party (after POKEMON, or to send out the next one after fainting) or the Bag:
             // a whole touch-screen page, shown as it is.
             only("battle-list", 1);
-        else if (funcWatch.Ran(bw2.battle, 2) && (funcWatch.Ran(bw2.battleChoice, 4) || funcWatch.Ran(bw2.battleYesNo, 4)))
-            // A question on the top screen ("Use next Pokemon?") answered on the touch screen:
-            // both, side by side.
-            sc = Stack("battle-choice", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
+        else if (funcWatch.Ran(bw2.battle, 2) && (funcWatch.Ran(bw2.battleChoice, 4) ||
+            funcWatch.Ran(bw2.battleYesNo, 4) || funcWatch.Ran(bw2.battleYesNoPoll, 1)))
+            sc = BattleChoiceScene(viewWidth);
         else if (funcWatch.Ran(bw2.battle, 2))
         {
             // The battle is drawn in 3D on the top screen, so the widescreen renderer shows
@@ -3386,39 +3388,7 @@ int main(int argc, char** argv)
             sc.weatherObj = weatherParticles();
         }
         else if (funcWatch.Ran(bw2.bag, 2))
-        {
-            // The bag at full size against the right edge, and the item's card from the other
-            // screen (name, icon, count and description) over the left part, where the bottom
-            // screen only has a picture of the bag (its pockets also change with L and R).
-            // (No item chosen, or an empty pocket: the card is blank, the bag alone in the
-            // middle. The card's text is white: some of it means there is something to show.)
-            int text = 0;
-            if (screens && screens[0].pixels)
-                for (int y = 28; y < 152; y += 2)
-                    for (int x = 8; x < 248; x += 2)
-                    {
-                        const uint32_t c = screens[0].pixels[y * 256 + x];
-                        text += ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 200;
-                    }
-            sc.name = "bag";
-            Element list = FullScreen(1);
-            if (text >= 12)
-            {
-                list.dx = viewRight - 256;
-                const float left = viewRight - 256 + 116 - viewLeft; // up to where the list starts
-                Element card = Crop(0, 8, 28, 240, 124);
-                card.scale = std::min(0.85f, (left - 6) / card.sw);
-                card.dx = viewLeft + 3;
-                card.dy = 4;
-                card.border = true;
-                sc.items = { list, card };
-            }
-            else
-                sc.items = { list };
-            sc.bgScreen = 1;
-            sc.bgX = 2;
-            sc.bgY = 2;
-        }
+            sc = BagScene(viewWidth, screens);
         else if (funcWatch.Ran(bw2.options, 2))
             // The explanation of the chosen option (a box near the bottom of the other screen)
             // above the list of options.
@@ -3464,7 +3434,7 @@ int main(int argc, char** argv)
             // row 117), which runs off the bottom of the screen and is never drawn further: it
             // is cut below its text and closed with the saved game's card's bottom edge.
             const int extra = 16;
-            const bool regionalMenu = RegionalProfiles::Find(gameCode.c_str()) != nullptr;
+            const bool regionalMenu = (BaseGameCode(gameCode) != gameCode) || (RegionalProfiles::Find(gameCode.c_str()) != nullptr);
             // Keep complete rows for the new profiles: German labels exceed the English crop.
             Element list = Crop(0, regionalMenu ? 0 : 32, 15, regionalMenu ? 256 : 194, 193);
             Element cards = Crop(1, regionalMenu ? 0 : 22, 14, regionalMenu ? 256 : 214, 166);
