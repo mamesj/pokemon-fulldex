@@ -230,6 +230,26 @@ inline bool ReadGame(const std::string& rom, const std::string& folder, Game& g)
     for (char& c : g.name) c = (char)toupper((unsigned char)c);
     struct stat st;
     g.hasSave = stat((folder + "/" + g.saveName).c_str(), &st) == 0;
+    if (!g.hasSave)
+    {
+        // If the regional save name does not exist yet, look for common existing alternatives
+        // (such as <rom_stem>.sav, the unregionalised name e.g. black2.sav, or game.sav):
+        const std::string romBase = rom.substr(rom.find_last_of('/') + 1);
+        const size_t dot = romBase.find_last_of('.');
+        const std::string stem = (dot != std::string::npos) ? romBase.substr(0, dot) : romBase;
+        const size_t dash = g.saveName.find('-');
+        const std::string baseSave = (dash != std::string::npos) ? g.saveName.substr(0, dash) + ".sav" : "";
+        for (const std::string& candidate : { stem + ".sav", baseSave, std::string("game.sav") })
+        {
+            if (!candidate.empty() && candidate != g.saveName &&
+                stat((folder + "/" + candidate).c_str(), &st) == 0)
+            {
+                g.saveName = candidate;
+                g.hasSave = true;
+                break;
+            }
+        }
+    }
     return true;
 }
 

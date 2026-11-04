@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **Launcher save detection**: auto-detect existing saves matching the ROM's filename, base game title or fallback name when opening a game.
+
 - Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
   and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,
   diamond-de.sav, ...). Japanese Diamond and Pearl are not supported yet.
