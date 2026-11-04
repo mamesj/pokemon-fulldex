@@ -1,5 +1,5 @@
 # All fixtures are synthetic; never add ROMs, generated game code or saves to CI.
-name: Native portability
+name: CI Tests
 on:
   push:
   pull_request:
@@ -7,59 +7,14 @@ on:
 permissions:
   contents: read
 jobs:
-  unix:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-22.04, macos-15, macos-15-intel]
-    runs-on: ${{ matrix.os }}
+  test:
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Linux prerequisites
-        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ clang pkg-config libsdl2-dev libpng-dev zlib1g-dev
-      - name: Mac prerequisites
-        if: runner.os == 'macOS'
-        run: python -m pip install "cmake>=3.21,<4" ninja
-      - run: python -m unittest discover -s tests -v
-      - run: python tests/native_smoke.py --build-dir '${{ runner.temp }}/ssrecomp smoke'
-      - name: Check Mac minimum OS and library dependencies
-        if: runner.os == 'macOS'
-        run: python tools/macos/check_binary.py '${{ runner.temp }}/ssrecomp smoke/native/ssrecomp' --max-macos 11.0 --system-libraries-only
-      # The Mac all-in-one program (tools/mac/build_all.sh) needs a ROM for its tables; here it
-      # is compiled on the smoke test's synthetic fixture instead: the game list, the JIT, no OpenGL.
-      - name: Mac all-in-one program
-        if: runner.os == 'macOS'
-        run: |
-          out='${{ runner.temp }}/pc-mac'
-          cmake -S . -B "$out" -G Ninja -DCMAKE_BUILD_TYPE=Release -DSSR_JIT=ON -DSSR_PC_ALL_GAMES=ON \
-            -DSSR_PNG=OFF -DSSR_GPU3D=OFF -DSSR_PORTABLE_X86=ON \
-            -DSSR_GENERATED_DIR='${{ runner.temp }}/ssrecomp smoke/generated fixtures with spaces'
-          cmake --build "$out" --target ssrecomp --parallel 3
-          rc=0; "$out/ssrecomp" --help 2> "$out/help.txt" || rc=$?
-          test "$rc" = 2 && grep -q 'usage: ssrecomp' "$out/help.txt"
-          python tools/macos/check_binary.py "$out/ssrecomp" --max-macos 11.0 --system-libraries-only
-      - name: Mac desktop shortcuts
-        if: runner.os == 'macOS'
-        run: python tests/mac_shortcuts.py
-  windows:
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-gcc
-            mingw-w64-ucrt-x86_64-SDL2 mingw-w64-ucrt-x86_64-libpng
-            mingw-w64-ucrt-x86_64-zlib mingw-w64-ucrt-x86_64-pkgconf
-      - run: python -m unittest discover -s tests -v
-      - run: python tests/native_smoke.py --build-dir "$RUNNER_TEMP/ssrecomp smoke"
+      - name: Run unit test suite
+        run: python -m unittest discover -s tests -v

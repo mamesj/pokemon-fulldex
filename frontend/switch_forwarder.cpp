@@ -521,7 +521,7 @@ void PatchNacp(NacpStruct& nacp, const std::string& name, u64 tid)
         memset(lang.name, 0, sizeof(lang.name));
         strncpy(lang.name, shown.c_str(), sizeof(lang.name) - 1);
         memset(lang.author, 0, sizeof(lang.author));
-        strncpy(lang.author, "Pokémon Fulldex", sizeof(lang.author) - 1);
+        strncpy(lang.author, "NoSplitNX", sizeof(lang.author) - 1);
     }
     nacp.startup_user_account = 0;           // no user to choose
     nacp.user_account_switch_lock = 0;

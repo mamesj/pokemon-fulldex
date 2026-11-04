@@ -66,7 +66,7 @@ void ShowMessage(const std::string& text)
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     PadState pad;
     padInitializeDefault(&pad);
-    printf("\n  Pokemon DS widescreen\n\n%s\n\n  Press + to return to the Homebrew Menu.\n", text.c_str());
+    printf("\n  NoSplitNX\n\n%s\n\n  Press + to return to the Homebrew Menu.\n", text.c_str());
     while (appletMainLoop())
     {
         padUpdate(&pad);
@@ -90,10 +90,16 @@ bool Playable(const Launcher::Game& g)
 {
     if (g.platform == Launcher::GBA) return true; // (any GBA game plays, with widescreen or without)
     if (!g.known) return false;
-    if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE")) return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
+    const char* hackBase = Launcher::HackBaseCode(g.code);
+    if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE") || (hackBase && (!strcmp(hackBase, "IPGE") || !strcmp(hackBase, "IPKE"))))
+        return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
     struct stat st;
     if (stat((g.folder + "/funcs.txt").c_str(), &st) == 0) return true;
-    return RomfsReady() && stat(("romfs:/funcs/" + g.code + ".txt").c_str(), &st) == 0;
+    if (!RomfsReady()) return false;
+    if (stat(("romfs:/funcs/" + g.code + ".txt").c_str(), &st) == 0) return true;
+    if (stat(("romfs:/funcs/" + BaseGameCode(g.code) + ".txt").c_str(), &st) == 0) return true;
+    if (hackBase && stat(("romfs:/funcs/" + std::string(hackBase) + ".txt").c_str(), &st) == 0) return true;
+    return false;
 }
 
 // The settings: settings.cfg in the program's folder (ssrecomp.cfg before; an old one is renamed).
@@ -311,7 +317,7 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
         if (updateWork)
         {
             const std::string url = Updater::Choose();
-            if (!url.empty()) note = "NEW VERSION: GITHUB.COM/MAMESJ/POKEMON-FULLDEX/RELEASES";
+            if (!url.empty()) note = "NEW VERSION: GITHUB.COM/IAMCARRON/NOSPLITNX/RELEASES";
             const Updater::Status u = Updater::Get();
             if (page.selected >= 0 && page.selected < (int)page.items.size() && !page.items[page.selected].values.empty())
                 page.items[page.selected].values[0].second = u.text;
@@ -395,7 +401,7 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
             if (hit == 0)
             {
                 updateMenu.open = false;
-                if (!Updater::Choose().empty()) note = "NEW VERSION: GITHUB.COM/MAMESJ/POKEMON-FULLDEX/RELEASES";
+                if (!Updater::Choose().empty()) note = "NEW VERSION: GITHUB.COM/IAMCARRON/NOSPLITNX/RELEASES";
             }
             else if (hit == 1) updateMenu.open = false;
             if (down & HidNpadButton_Plus) break;
@@ -518,6 +524,19 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
                     note.clear();
                 }
             }
+            const u64 btnX = ctl.PadCustom() ? action(Controls::X) : (u64)HidNpadButton_X;
+            if (!wasNav && !onSettings && !onTabs && (down & btnX))
+            {
+                std::vector<int> playable;
+                for (size_t i = 0; i < games.size(); ++i)
+                    if (Playable(games[i]) && !games[i].comingSoon && Launcher::InTab(games[i].platform, tab))
+                        playable.push_back((int)i);
+                if (!playable.empty())
+                {
+                    selected = playable[rand() % playable.size()];
+                    note.clear();
+                }
+            }
             if (!wasNav && !onSettings && !onTabs && selected >= 0 && (down & (ctl.PadCustom() ? action(Controls::A) : (u64)HidNpadButton_A)))
             {
                 if (Playable(games[selected]))
@@ -558,8 +577,8 @@ int PickGame(const std::vector<Launcher::Game>& games, int selected, const std::
                 if (on) canvas.Fill(x - 3 * s, 4 * s, Canvas::TextWidth(text, s) + 5 * s, 13 * s, th.frame);
                 canvas.Text(x, 7 * s, text, s, on ? th.title : th.hint);
             };
-            if (guide && !keysOpen) button(8 * s, "< BACK", false);
-            else if (!guide) button(canvas.w - 8 * s - Canvas::TextWidth("SETTINGS", s), "SETTINGS", onSettings);
+            if (guide && !keysOpen) button(8 * s, "< BACK (B)", false);
+            else if (!guide) button(canvas.w - 8 * s - Canvas::TextWidth("SETTINGS (Y)", s), "SETTINGS (Y)", onSettings);
         }
         u32 stride;
         u32* out = (u32*)framebufferBegin(&fb, &stride);
@@ -680,7 +699,7 @@ static std::string g_jitMarker, g_fastMemMarker;
 bool Start(int& argc, char**& argv)
 {
     // The folder the .nro was started from (the Homebrew Menu passes its path), or the usual one.
-    std::string dir = "sdmc:/switch/ssrecomp";
+    std::string dir = "sdmc:/switch/nosplitnx";
     if (argc > 0 && argv[0] && strncmp(argv[0], "sdmc:/", 6) == 0)
     {
         std::string self = argv[0];
@@ -935,10 +954,15 @@ bool Start(int& argc, char**& argv)
     if (!heartSilver)
     {
         const std::string own = gameDir + "/funcs.txt", builtIn = std::string("romfs:/funcs/") + code + ".txt";
+        const std::string builtInBase = std::string("romfs:/funcs/") + BaseGameCode(code) + ".txt";
+        const char* hackBase = Launcher::HackBaseCode(code);
+        const std::string builtInHack = hackBase ? std::string("romfs:/funcs/") + hackBase + ".txt" : "";
         if (stat(own.c_str(), &st) == 0) funcsPath = own;
         else if (RomfsReady() && stat("romfs:/funcs", &st) == 0)
         {
             if (stat(builtIn.c_str(), &st) == 0) funcsPath = builtIn;
+            else if (stat(builtInBase.c_str(), &st) == 0) funcsPath = builtInBase;
+            else if (!builtInHack.empty() && stat(builtInHack.c_str(), &st) == 0) funcsPath = builtInHack;
             else
             {
                 ShowMessage(std::string("  ") + rom.substr(rom.find_last_of('/') + 1) + " is a game this program does not know\n"
@@ -950,9 +974,9 @@ bool Start(int& argc, char**& argv)
                             "    SoulSilver and HeartGold download;\n"
                             "    Pokemon Platinum (CPUE), with the Platinum download;\n"
                             "    Pokemon Diamond (ADAE) and Pearl (APAE);\n"
-                            "    and in Spanish: White (IRAS), Platinum (CPUS), SoulSilver (IPGS),\n"
-                            "    HeartGold (IPKS) and Diamond (ADAS); Diamond also in German and Italian,\n"
-                            "    Pearl in French, Spanish, German and Korean.\n"
+                            "    and in Spanish: Black (IRBS), White (IRAS), Black 2 (IRES), White 2 (IRDS),\n"
+                            "    Platinum (CPUS), SoulSilver (IPGS), HeartGold (IPKS) and Diamond (ADAS);\n"
+                            "    Diamond also in German and Italian, Pearl in French, Spanish, German and Korean.\n"
                             "  Other languages put the game's code in other places.");
                 return false;
             }
@@ -1068,6 +1092,63 @@ bool LocalTime(int& year, int& month, int& day, int& hour, int& minute, int& sec
     minute = cal.minute;
     second = cal.second;
     return true;
+}
+
+bool IsHandheld()
+{
+    return appletGetOperationMode() == AppletOperationMode_Handheld;
+}
+
+const char* SystemLanguage()
+{
+    static std::string detected;
+    if (!detected.empty()) return detected.c_str();
+
+    Result rc = setInitialize();
+    if (R_SUCCEEDED(rc))
+    {
+        u64 languageCode = 0;
+        if (R_SUCCEEDED(setGetSystemLanguage(&languageCode)))
+        {
+            SetLanguage lang = SetLanguage_ENUS;
+            if (R_SUCCEEDED(setMakeLanguage(languageCode, &lang)))
+            {
+                switch (lang)
+                {
+                case SetLanguage_JA:    detected = "ja"; break;
+                case SetLanguage_ENUS:
+                case SetLanguage_ENGB:  detected = "en"; break;
+                case SetLanguage_FR:
+                case SetLanguage_FRCA:  detected = "fr"; break;
+                case SetLanguage_DE:    detected = "de"; break;
+                case SetLanguage_IT:    detected = "it"; break;
+                case SetLanguage_ES:
+                case SetLanguage_ES419: detected = "es"; break;
+                case SetLanguage_ZHCN:
+                case SetLanguage_ZHTW:
+                case SetLanguage_ZHHANS:
+                case SetLanguage_ZHHANT: detected = "zh"; break;
+                case SetLanguage_KO:    detected = "ko"; break;
+                case SetLanguage_NL:    detected = "nl"; break;
+                case SetLanguage_PT:
+                case SetLanguage_PTBR:  detected = "pt"; break;
+                case SetLanguage_RU:    detected = "ru"; break;
+                default:                detected = "en"; break;
+                }
+            }
+            else
+            {
+                char langStr[9] = {0};
+                std::memcpy(langStr, &languageCode, sizeof(u64));
+                detected = langStr;
+            }
+            fprintf(stderr, "[switch] detected system language: %s (code 0x%llx, enum %d)\n",
+                detected.c_str(), (unsigned long long)languageCode, (int)lang);
+        }
+        setExit();
+    }
+    if (detected.empty()) detected = "en";
+    return detected.c_str();
 }
 
 static Thread g_emuThread;

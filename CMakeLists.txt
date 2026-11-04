@@ -7,14 +7,14 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin" AND NOT DEFINED CMAKE_OSX_DEPLOYMENT
         set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version")
     endif()
 endif()
-project(ssrecomp LANGUAGES C CXX)
+project(nosplitnx LANGUAGES C CXX)
 # Reconfigure after source edits so the packaged binary build ID advances for hotfixes,
 # including incremental builds that do not explicitly invoke CMake first.
 file(GLOB_RECURSE SSR_BUILD_VERSION_INPUTS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/frontend/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/frontend/*.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/frontend/*.mm" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/runtime/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/melonDS/src/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/melonDS/src/*.h" "${CMAKE_CURRENT_SOURCE_DIR}/melonDS/src/*.S")
+    "${CMAKE_CURRENT_SOURCE_DIR}/runtime/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/melonDS/src/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/melonDS/src/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/melonDS/src/*.S")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${SSR_BUILD_VERSION_INPUTS})
 
 set(SSR_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/gen" CACHE PATH "Generated game sources")
@@ -126,23 +126,7 @@ if(ANDROID OR SSR_SWITCH)
     endif()
 endif()
 
-if(ANDROID)
-    # On Android the game is the library libmain.so that SDL's Java activity loads
-    # (tools/android/apk.py packs it into an APK). SDL2 is one built for Android
-    # (CMAKE_PREFIX_PATH); no libpng: screenshots are a desktop test aid.
-    add_library(ssrecomp SHARED ${SSRECOMP_SOURCES})
-    set_target_properties(ssrecomp PROPERTIES OUTPUT_NAME main)
-    target_include_directories(ssrecomp PRIVATE melonDS/src frontend runtime "${SSR_GENERATED_DIR}")
-    target_compile_definitions(ssrecomp PRIVATE SSR_NO_PNG SSR_VERSION="${SSR_VERSION}")
-    target_link_libraries(ssrecomp PRIVATE core SDL2::SDL2 android log)
-    # The all-games app (tools/android/build_all.sh): no game inside, the game list from the
-    # PC program (frontend/pc_launcher.cpp) with the ROMs in a folder the player chooses.
-    option(SSR_PC_ALL_GAMES "The all-games program with its game list" OFF)
-    if(SSR_PC_ALL_GAMES)
-        target_sources(ssrecomp PRIVATE frontend/pc_launcher.cpp)
-        target_compile_definitions(ssrecomp PRIVATE SSR_PC_LAUNCHER)
-    endif()
-elseif(SSR_SWITCH)
+if(SSR_SWITCH)
     # On the Switch the game is an .nro, a program for the Homebrew Menu, made from the
     # executable below. Like the Android app it holds the player's own game, so it is built
     # on the player's PC and never shared. No libpng: screenshots are a desktop test aid.
@@ -247,8 +231,9 @@ elseif(SSR_SWITCH)
     endif()
     # The .nro is packed on every build (a few seconds), so that changing only the icon needs
     # no rebuild. The icon is icon.jpg in the build folder when there is one (your own, a
-    # 256x256 JPEG; kept out of the source), otherwise libnx's default.
-    set(SSR_NRO_TITLE "ssrecomp" CACHE STRING "Title shown in the Homebrew Menu")
+    # 256x256 JPEG; kept out of the source), otherwise tools/switch/icon.jpg.
+    set(SSR_NRO_TITLE "NoSplitNX" CACHE STRING "Title shown in the Homebrew Menu")
+    set(SSR_NRO_AUTHOR "IamCarron" CACHE STRING "Author shown in the Homebrew Menu")
     # Files put in the .nro's romfs (for the Black games' shared build, their function tables
     # made without a ROM: tools/switch/build_game.sh bw). Empty: none.
     set(SSR_SWITCH_ROMFS "" CACHE PATH "Folder whose files go in the .nro's romfs")
@@ -274,8 +259,8 @@ elseif(SSR_SWITCH)
             "-DNACPTOOL=${SSR_NACPTOOL}" "-DELF2NRO=${SSR_ELF2NRO}"
             "-DELF=$<TARGET_FILE:ssrecomp>" "-DOUT=${CMAKE_CURRENT_BINARY_DIR}/ssrecomp.nro"
             "-DNACP=${CMAKE_CURRENT_BINARY_DIR}/ssrecomp.nacp"
-            "-DTITLE=${SSR_NRO_TITLE}" "-DVERSION=${SSR_NRO_VERSION}"
-            "-DICON=${CMAKE_CURRENT_BINARY_DIR}/icon.jpg" "-DDEFAULT_ICON=${DEVKITPRO}/libnx/default_icon.jpg"
+            "-DTITLE=${SSR_NRO_TITLE}" "-DAUTHOR=${SSR_NRO_AUTHOR}" "-DVERSION=${SSR_NRO_VERSION}"
+            "-DICON=${CMAKE_CURRENT_BINARY_DIR}/icon.jpg" "-DDEFAULT_ICON=${CMAKE_CURRENT_SOURCE_DIR}/tools/switch/icon.jpg"
             "-DROMFS=${SSR_SWITCH_ROMFS}"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/switch/make_nro.cmake"
         DEPENDS ssrecomp
@@ -299,51 +284,9 @@ else()
     else()
         target_compile_definitions(ssrecomp PRIVATE SSR_NO_PNG)
     endif()
-    if(SSR_GPU3D AND WIN32)
-        # (Windows: the context made with WGL, frontend/glcontext_wgl.cpp.)
-        target_link_libraries(ssrecomp PRIVATE opengl32 gdi32)
-    elseif(SSR_GPU3D)
+    if(SSR_GPU3D)
         target_include_directories(ssrecomp PRIVATE "${SSR_EGL_INCLUDE}")
         target_link_libraries(ssrecomp PRIVATE "${SSR_EGL_LIBRARY}")
-    endif()
-    # The PC all-games program (tools/pc/build_all.sh): the game list when started without
-    # arguments (frontend/pc_launcher.cpp), with the ROMs in the roms folder beside it.
-    option(SSR_PC_ALL_GAMES "The PC all-games program with its game list" OFF)
-    if(SSR_PC_ALL_GAMES)
-        target_sources(ssrecomp PRIVATE frontend/pc_launcher.cpp)
-        target_compile_definitions(ssrecomp PRIVATE SSR_PC_LAUNCHER)
-        # Updates from the game list (frontend/updater.cpp). The time of building tells a
-        # download with no record of what was installed from a newer release (only this one file
-        # is compiled again when it changes).
-        string(TIMESTAMP SSR_BUILT_AT "%s" UTC)
-        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/fulldex-build-id.txt" "${SSR_BUILT_AT}\n")
-        target_sources(ssrecomp PRIVATE frontend/updater.cpp)
-        set_source_files_properties(frontend/updater.cpp PROPERTIES COMPILE_DEFINITIONS "SSR_BUILT_AT=${SSR_BUILT_AT}")
-        target_compile_definitions(ssrecomp PRIVATE SSR_UPDATER)
-    endif()
-    if(UNIX AND NOT APPLE AND SSR_PC_ALL_GAMES)
-        # The Linux download carries its own SDL2 beside the program (tools/pc/build_all.sh),
-        # found there first: $ORIGIN, the program's folder.
-        set_target_properties(ssrecomp PROPERTIES BUILD_RPATH "$ORIGIN")
-    endif()
-    if(WIN32 AND SSR_PC_ALL_GAMES)
-        # A window program (no console window behind it; the log goes to game.log), with a
-        # manifest that makes the C library's file names UTF-8 (folders named in any letters), and the C++
-        # and thread libraries inside it so that only SDL2.dll goes beside it.
-        enable_language(RC)
-        target_sources(ssrecomp PRIVATE frontend/windows/ssrecomp.rc)
-        # The program's icon (Explorer, the taskbar and its windows): SSR_PC_ICON, an .ico of the
-        # builder's own (tools/pc/build_all.sh), as resource 1; without one, Windows' plain icon.
-        set(SSR_PC_ICON "" CACHE FILEPATH "an .ico for the PC all-games program")
-        if(SSR_PC_ICON AND EXISTS "${SSR_PC_ICON}")
-            file(TO_CMAKE_PATH "${SSR_PC_ICON}" _ssr_icon)
-            file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/icon.rc" "1 ICON \"${_ssr_icon}\"\n")
-            target_sources(ssrecomp PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/icon.rc")
-        endif()
-        set_target_properties(ssrecomp PROPERTIES WIN32_EXECUTABLE ON)
-        target_link_options(ssrecomp PRIVATE -static)
-        # (The game list's desktop shortcuts: frontend/shortcuts.h.)
-        target_link_libraries(ssrecomp PRIVATE ole32 shell32 uuid)
     endif()
 endif()
 # The all-games program's game list: pictures of the games built into it (SSR_PC_ART, a folder of
@@ -404,23 +347,7 @@ endif()
 # RetroAchievements: the library, and each platform's way to the internet (achievements_http.cpp);
 # the program's version, which the server is told with its name, from CHANGELOG.md's newest release.
 target_link_libraries(ssrecomp PRIVATE rcheevos)
-if(ANDROID)
-    target_link_options(ssrecomp PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,-z,common-page-size=16384")
-endif()
-if(WIN32)
-    target_link_libraries(ssrecomp PRIVATE winhttp)
-elseif(APPLE)
-    # (NSURLSession, from Objective-C++: built as C++ told it is Objective-C++.)
-    target_sources(ssrecomp PRIVATE frontend/achievements_http_apple.mm)
-    set_source_files_properties(frontend/achievements_http_apple.mm PROPERTIES LANGUAGE CXX COMPILE_FLAGS "-x objective-c++")
-    target_link_libraries(ssrecomp PRIVATE "-framework Foundation")
-    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-        # The list upright, a game sideways (frontend/ios_orient.mm). UIKit is iOS only.
-        target_sources(ssrecomp PRIVATE frontend/ios_orient.mm)
-        set_source_files_properties(frontend/ios_orient.mm PROPERTIES LANGUAGE CXX COMPILE_FLAGS "-x objective-c++")
-        target_link_libraries(ssrecomp PRIVATE "-framework UIKit")
-    endif()
-elseif(SSR_SWITCH)
+if(SSR_SWITCH)
     # (devkitPro's libcurl, with its TLS library, from the portlibs.)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(SSR_SWITCH_CURL REQUIRED IMPORTED_TARGET libcurl)
@@ -439,10 +366,6 @@ endif()
 target_compile_definitions(ssrecomp PRIVATE SSR_RA_VERSION="${SSR_RA_VERSION}")
 
 if(SSR_GPU3D)
-    if(WIN32)
-        target_sources(ssrecomp PRIVATE frontend/glcontext_wgl.cpp)
-    else()
-        target_sources(ssrecomp PRIVATE frontend/glcontext.cpp)
-    endif()
+    target_sources(ssrecomp PRIVATE frontend/glcontext.cpp)
     target_compile_definitions(ssrecomp PRIVATE SSR_GPU3D)
 endif()

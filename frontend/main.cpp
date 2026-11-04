@@ -17,9 +17,6 @@
 #include <thread>
 #include "sampler.h"
 #include "ssr_os.h"
-#ifdef SSR_IOS
-#include "ios_orient.h"
-#endif
 #include "achievements.h"
 #include "exclusives.h"
 #include "save_backups.h"
@@ -62,18 +59,15 @@
 #include "audiostretch.h"
 #include "gpucompose.h"
 #include "emuthread.h"
-#include "pc_launcher.h"
 
 // WORLD ON GPU, the widescreen world drawn by the graphics chip (melonDS/src/GPU3D_WideGpu.h):
-// deko3D on the Switch, OpenGL on a PC (EGL on Linux, WGL on Windows).
+// deko3D on the Switch, OpenGL on a PC (EGL on Linux).
 #if defined(SSR_DEKO3D) || (defined(SSR_GPU3D) && !defined(__SWITCH__))
 #define SSR_WORLD_ON_GPU 1
 #else
 #define SSR_WORLD_ON_GPU 0
 #endif
-// 3D ON GPU, melonDS's OpenGL renderer for the whole 3D scene (GPU3D_GLThread.h): a PC test;
-// not offered in the PC all-games program, which has WORLD ON GPU for the same purpose.
-#if defined(SSR_GPU3D) && !defined(__SWITCH__) && !defined(SSR_PC_LAUNCHER)
+#if defined(SSR_GPU3D) && !defined(__SWITCH__)
 #define SSR_MENU_GPU3D 1
 #else
 #define SSR_MENU_GPU3D 0
@@ -335,7 +329,6 @@ struct PadState
     float lx = 0, ly = 0, rx = 0, ry = 0, lt = 0, rt = 0;
 };
 
-#include "touchpad.h"
 #include "ui_lang_sdl.h"
 #include "controls.h"
 #include "cheats.h"
@@ -1585,7 +1578,7 @@ struct Settings
     // read from ssrecomp.cfg ("gpu3d_test=1"), never offered in the menu or on by default. (The
     // key replaced "gpu3d", which the build that hung saved as 1.)
     bool gpu3d = false;
-#if defined(SSR_DEKO3D) || defined(SSR_PC_LAUNCHER)
+#if defined(SSR_DEKO3D)
     bool wideGpu = true;         // the widescreen world drawn by the graphics chip (GPU3D_WideGpu.h)
 #else
     bool wideGpu = false;
@@ -1712,9 +1705,6 @@ struct Settings
         f << "ra=" << (ra.on ? 1 : 0) << "\n";
         if (!ra.user.empty()) f << "ra_user=" << ra.user << "\n";
         if (!ra.token.empty()) f << "ra_token=" << ra.token << "\n";
-#ifdef SSR_PC_LAUNCHER
-        if (windowW > 0 && windowH > 0) f << "window=" << windowW << "x" << windowH << "\n";
-#endif
 #ifdef SSR_GPU3D
         f << "gpu3d_test=" << (gpu3d ? 1 : 0) << "\n";
         f << "wide_gpu=" << (wideGpu ? 1 : 0) << "\n";
@@ -1824,12 +1814,8 @@ int main(int argc, char** argv)
 #endif
 #ifdef __SWITCH__
     // Started from the Homebrew Menu: the ROM, save and settings are in the app's folder
-    // on the SD card (sdmc:/switch/ssrecomp), and the log goes there too.
+    // on the SD card (sdmc:/switch/nosplitnx), and the log goes there too.
     if (!SwitchPlatform::Start(argc, argv)) return 1;
-#endif
-#ifdef SSR_PC_LAUNCHER
-    // The PC all-games program started without arguments: the game list (pc_launcher.cpp).
-    if (!PcLauncher::Start(argc, argv)) return 0;
 #endif
     if (!ParseArgs(argc, argv, opt))
     {
@@ -2050,6 +2036,7 @@ int main(int argc, char** argv)
     // changed in the pause menu, and are remembered.
     cfg.wideLines = 288;
     cfg.fps60 = false;
+    cfg.autoDetail = true; // lower lines dynamically when busy, keeping frames on time
 #ifdef SSR_DEKO3D
     // Black, Black 2 and White 2 (a function table) with the world drawn by the graphics chip
     // (WORLD ON GPU, on by default): measured at about 16 ms a frame at 720 lines with the
@@ -2060,20 +2047,6 @@ int main(int argc, char** argv)
         cfg.wideLines = 720;
         cfg.fps60 = true;
     }
-#endif
-#endif
-#ifdef SSR_PC_LAUNCHER
-    // The PC download's first start: borderless fullscreen, the world at 1080 lines (with WORLD
-    // ON GPU; LOWER RES WHEN BUSY brings it down on a PC that cannot keep up) and 60 FPS.
-    // (Its game list's settings page shows the same defaults: launcher.h, SettingsList.)
-    cfg.fullscreen = true;
-    cfg.wideLines = 1080;
-    cfg.fps60 = true;
-    cfg.ffLowRes = false; // (FAST FORWARD LOW RES: the resolution stays unless it is turned on)
-#if defined(__ANDROID__) || defined(__APPLE__)
-    // (The Android app and the Mac draw the world with the processor: 720 lines. A Mac's OpenGL
-    // stops at 4.1, short of WORLD ON GPU's 4.3.)
-    cfg.wideLines = 720;
 #endif
 #endif
     if (!opt.headless) cfg.Load(opt.config);
@@ -2257,16 +2230,7 @@ int main(int argc, char** argv)
         LayoutNativeSize(layout, w, h);
         w *= opt.scale;
         h *= opt.scale;
-        const char* windowTitle = "Pokemon SoulSilver";
-#ifdef SSR_PC_LAUNCHER
-        // The PC all-games program: a wide window (the widescreen view follows the window's
-        // shape), as large as it was last time, named after the game.
-        w = cfg.windowW >= 320 && cfg.windowH >= 240 ? cfg.windowW : 1280;
-        h = cfg.windowW >= 320 && cfg.windowH >= 240 ? cfg.windowH : 720;
-        static std::string gameTitle;
-        gameTitle = PcLauncher::GameName();
-        if (!gameTitle.empty()) windowTitle = gameTitle.c_str();
-#endif
+        const char* windowTitle = "NoSplitNX";
         window = SDL_CreateWindow(windowTitle, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
             w, h,
             SDL_WINDOW_RESIZABLE |
@@ -2274,14 +2238,7 @@ int main(int argc, char** argv)
             SDL_WINDOW_ALLOW_HIGHDPI |
 #endif
             (cfg.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
-        // Started from the game list, this window comes after the list's has closed, and Windows
-        // left it behind without the focus: the keyboard and controllers did nothing until it was
-        // clicked. The list's window was this program's, so it may take the focus.
         if (window) SDL_RaiseWindow(window);
-#ifdef SSR_IOS
-        // The list left the screen upright. Turn it once this window exists.
-        IosOrientGame();
-#endif
         // The OpenGL ES renderer uploads the picture several times faster than SDL's default
         // (desktop OpenGL) on the machines this was measured on. SDL_RENDER_DRIVER overrides.
         // Not on Windows: there OpenGL ES can come with a framebuffer that converts to sRGB,
@@ -2603,6 +2560,7 @@ int main(int argc, char** argv)
         int dexOpen = -1, dexApp = -1;
         int startContinue = -1, confirmDialog = -1, startMain = -1, intro = -1, nameEntry = -1;
         int battleList = -1, battleBag = -1, battleChoice = -1, battleYesNo = -1;
+        int battleYesNoPoll = -1;
         int setupSingle = -1, setupDouble = -1, setupTriple = -1, setupRotation = -1;
         int save = -1, saveWrite = -1;
         std::vector<int> levelUpWin; // the level-up window in a battle (BtlvCore_Wait*LevelUp*)
@@ -2652,6 +2610,8 @@ int main(int argc, char** argv)
         bw2.battleBag = bw2Find("BBagMain_Task");       // the Bag in a battle
         bw2.battleChoice = bw2Find("BChoiceMain_Task"); // a choice on the touch screen in a battle
         bw2.battleYesNo = bw2Find("BtlvInput_YesNoTask"); // YES / NO in a battle ("Use next Pokemon?")
+        // The opening task ends before the player answers. The poll lasts for the question.
+        bw2.battleYesNoPoll = bw2Find("BtlvCore_PollYesNo");
         bw2.setupSingle = bw2Find("BtlMain_SetupAloneSingle"); // which kind of battle starts
         bw2.setupDouble = bw2Find("BtlMain_SetupAloneDouble");
         bw2.setupTriple = bw2Find("BtlMain_SetupAloneTriple");
@@ -2758,28 +2718,24 @@ int main(int argc, char** argv)
             // the touch screen's arrangement: FIGHT above BAG, RUN and POKeMON; the four
             // moves two by two.
             const float bandY = 144, bandH = 48, viewL = 128 - viewWidth / 2, viewR = 128 + viewWidth / 2;
-            // (Another language's message is longer: "¿Qué debería hacer CHIMCHAR?" ends near x 232, so
-            // its box takes up to 60% of the view and the buttons the rest.)
-            const bool translated = BaseGameCode(gameCode) != gameCode;
             // A narrow view (4:3, 3:2: under 300 wide) has no room for the message beside the
             // buttons: the buttons take the whole band, the message (the question they answer)
-            // left out. Both Pokemon and both HP boxes stay in sight, which the touch screen's
-            // panel over the lower left covered there (GitHub #54, #67).
+            // left out. Both Pokemon and both HP boxes stay in sight.
             const bool narrow = viewWidth < 300;
-            const int edgeW = narrow ? 0 : 10, half = (int)(viewWidth / 2) - edgeW;
-            const int boxW = narrow ? 0 : std::min(246, translated ? std::max(half, std::min(240, (int)(viewWidth * 0.6f) - edgeW)) : half);
+            // The combat buttons need at least ~108 pixels for their labels (FIGHT, BAG, RUN, POKEMON / moves).
+            // On a 16:9 widescreen view (viewWidth ~341), the message box gets all remaining width (~229px).
+            // We scale the full 256-wide message box to fit that space so that no text is cut off or covered.
+            const float minPanelW = narrow ? viewWidth : 108.0f;
+            const float availBoxW = narrow ? 0.0f : std::max(0.0f, viewWidth - minPanelW - 4.0f);
+            const float boxScale = narrow ? 1.0f : std::min(1.0f, availBoxW / 256.0f);
+            const float actualBoxW = narrow ? 0.0f : 256.0f * boxScale;
             if (!narrow)
             {
-                sc.items.push_back({ 0, 0, 144, boxW, 48, viewL, bandY, 1.0f, 0, 255, false });
-                Element boxEdge = { 0, 0, 144, edgeW, 48, viewL + boxW, bandY, 1.0f, 0, 255, false };
-                boxEdge.flipX = true;
-                sc.items.push_back(boxEdge);
+                Element msgBox = { 0, 0, 144, 256, 48, viewL, bandY + (bandH - 48.0f * boxScale) / 2.0f, boxScale, 0, 255, false };
+                sc.items.push_back(msgBox);
             }
-            const float panelX = viewL + boxW + edgeW, panelY = bandY, panelR = viewR, panelB = bandY + bandH;
-            // (The margins leave room for the outlines, which are drawn outside each button: the
-            // chosen one's red outline stays inside the half, clear of the scene above.)
+            const float panelX = narrow ? viewL : viewL + actualBoxW + 2.0f, panelY = bandY, panelR = viewR, panelB = bandY + bandH;
             const float panelW = panelR - panelX, panelH = panelB - panelY, pad = 3, gap = 4;
-            // (The band's own colour around the message box.)
             sc.items.push_back(FillRect(panelX, panelY, (int)std::ceil(panelW) + 1, (int)panelH, 0x202020));
             // Each button's outline is drawn around the item listed here for it (in the order
             // of battleSel).
@@ -2972,6 +2928,8 @@ int main(int argc, char** argv)
             const float y = 192 - h - pad - 1;
             sc.items.push_back(FillRect(x - pad, y - pad, (int)(w + 2 * pad), (int)(h + 2 * pad), 0x14141C));
             sc.items.back().border = true;
+            sc.items.back().borderRadius = 3.0f;
+            sc.items.back().borderColor = 0x2A2E38;
             crop.dx = x;
             crop.dy = y;
             crop.scale = scale;
@@ -3065,6 +3023,8 @@ int main(int argc, char** argv)
                     const float x = (wideView ? viewRight : 256.0f) - w - pad - 2, y = 72 - h / 2;
                     sc.items.push_back(FillRect(x - pad, y - pad, (int)(w + 2 * pad), (int)(h + 2 * pad), 0x14141C));
                     sc.items.back().border = true;
+                    sc.items.back().borderRadius = 3.0f;
+                    sc.items.back().borderColor = 0x2A2E38;
                     crop.dx = x;
                     crop.dy = y;
                     crop.scale = scale;
@@ -3152,10 +3112,9 @@ int main(int argc, char** argv)
             // The party (after POKEMON, or to send out the next one after fainting) or the Bag:
             // a whole touch-screen page, shown as it is.
             only("battle-list", 1);
-        else if (funcWatch.Ran(bw2.battle, 2) && (funcWatch.Ran(bw2.battleChoice, 4) || funcWatch.Ran(bw2.battleYesNo, 4)))
-            // A question on the top screen ("Use next Pokemon?") answered on the touch screen:
-            // both, side by side.
-            sc = Stack("battle-choice", { Crop(0, 0, 0, 256, 192), Crop(1, 0, 0, 256, 192) }, true, viewWidth);
+        else if (funcWatch.Ran(bw2.battle, 2) && (funcWatch.Ran(bw2.battleChoice, 4) ||
+            funcWatch.Ran(bw2.battleYesNo, 4) || funcWatch.Ran(bw2.battleYesNoPoll, 1)))
+            sc = BattleChoiceScene(viewWidth);
         else if (funcWatch.Ran(bw2.battle, 2))
         {
             // The battle is drawn in 3D on the top screen, so the widescreen renderer shows
@@ -3296,6 +3255,7 @@ int main(int argc, char** argv)
             // panel would cover: it always has the panel, in the message box's band below them.
             int style = bw1.on || !wideView || !screens ? 0 : cfg.battleButtons;
             if (wideView && screens && !bw1.on && kind == 2) style = 2;
+            float panelLeft = 0;
             if ((moves || command || target) && style == 2)
             {
                 // PANEL: the corner panel's piece as tall as the message box (rows 147-189),
@@ -3305,14 +3265,43 @@ int main(int argc, char** argv)
                 c.dx = viewRight - 2 - c.sw * c.scale;
                 c.dy = 147;
                 c.border = true;
+                panelLeft = c.dx - 2;
                 sc.items.push_back(c);
             }
             else if (moves)
+            {
+                const float w = 256 * 0.5f;
+                panelLeft = (wideView ? 128 + viewWidth / 2 : 256.0f) - w - 4;
                 cornerPanel(Crop(1, 0, 30, 256, 98), 0.5f);   // the four moves, two by two (49 high)
+            }
             else if (command)
+            {
+                const float w = 256 * 0.44f;
+                panelLeft = (wideView ? 128 + viewWidth / 2 : 256.0f) - w - 4;
                 cornerPanel(Crop(1, 0, 78, 256, 114), 0.44f); // FIGHT above BAG, RUN and POKEMON (50 high)
+            }
             else if (target)
+            {
+                const float w = 256 * 0.45f;
+                panelLeft = (wideView ? 128 + viewWidth / 2 : 256.0f) - w - 4;
                 cornerPanel(Crop(1, 0, 22, 256, 110), 0.45f); // the targets (50 high)
+            }
+            if (wideView && (moves || command || target) && panelLeft > viewLeft && !sc.items.empty() && sc.items[0].holeCount < 4)
+            {
+                // Prevent the message box from being overlapped by the combat buttons:
+                // punch a hole in the top screen for the original message box area...
+                const int boxHole[4] = { 0, 144, 256, 192 };
+                std::copy(boxHole, boxHole + 4, sc.items[0].holes[sc.items[0].holeCount++]);
+                // ...and scale the message box to fit the available space beside the combat panel.
+                const float availBoxW = panelLeft - 2 - viewLeft;
+                const float boxScale = std::min(1.0f, availBoxW / 256.0f);
+                Element msgBox = Crop(0, 0, 144, 256, 48);
+                msgBox.dx = viewLeft;
+                msgBox.dy = 192 - 48.0f * boxScale;
+                msgBox.scale = boxScale;
+                msgBox.wideOnly = true;
+                sc.items.push_back(msgBox);
+            }
         }
         else if (funcWatch.Ran(bw2.save, 8) || (funcWatch.Ran(bw2.saveWrite, 8) && !strcmp(lastKnownBw2.name, "save")))
         {
@@ -3370,6 +3359,8 @@ int main(int argc, char** argv)
                 const float y = (192 - h) / 2;
                 sc.items.push_back(FillRect(x - pad, y - pad, (int)(w + 2 * pad), (int)(h + 2 * pad), 0x14141C));
                 sc.items.back().border = true;
+                sc.items.back().borderRadius = 3.0f;
+                sc.items.back().borderColor = 0x2A2E38;
                 for (Slot b : buttons)
                 {
                     b.crop.dx = x + b.col * (bw + gap);
@@ -3386,39 +3377,7 @@ int main(int argc, char** argv)
             sc.weatherObj = weatherParticles();
         }
         else if (funcWatch.Ran(bw2.bag, 2))
-        {
-            // The bag at full size against the right edge, and the item's card from the other
-            // screen (name, icon, count and description) over the left part, where the bottom
-            // screen only has a picture of the bag (its pockets also change with L and R).
-            // (No item chosen, or an empty pocket: the card is blank, the bag alone in the
-            // middle. The card's text is white: some of it means there is something to show.)
-            int text = 0;
-            if (screens && screens[0].pixels)
-                for (int y = 28; y < 152; y += 2)
-                    for (int x = 8; x < 248; x += 2)
-                    {
-                        const uint32_t c = screens[0].pixels[y * 256 + x];
-                        text += ((c >> 16) & 0xFF) > 200 && ((c >> 8) & 0xFF) > 200 && (c & 0xFF) > 200;
-                    }
-            sc.name = "bag";
-            Element list = FullScreen(1);
-            if (text >= 12)
-            {
-                list.dx = viewRight - 256;
-                const float left = viewRight - 256 + 116 - viewLeft; // up to where the list starts
-                Element card = Crop(0, 8, 28, 240, 124);
-                card.scale = std::min(0.85f, (left - 6) / card.sw);
-                card.dx = viewLeft + 3;
-                card.dy = 4;
-                card.border = true;
-                sc.items = { list, card };
-            }
-            else
-                sc.items = { list };
-            sc.bgScreen = 1;
-            sc.bgX = 2;
-            sc.bgY = 2;
-        }
+            sc = BagScene(viewWidth, screens);
         else if (funcWatch.Ran(bw2.options, 2))
             // The explanation of the chosen option (a box near the bottom of the other screen)
             // above the list of options.
@@ -3464,7 +3423,7 @@ int main(int argc, char** argv)
             // row 117), which runs off the bottom of the screen and is never drawn further: it
             // is cut below its text and closed with the saved game's card's bottom edge.
             const int extra = 16;
-            const bool regionalMenu = RegionalProfiles::Find(gameCode.c_str()) != nullptr;
+            const bool regionalMenu = (BaseGameCode(gameCode) != gameCode) || (RegionalProfiles::Find(gameCode.c_str()) != nullptr);
             // Keep complete rows for the new profiles: German labels exceed the English crop.
             Element list = Crop(0, regionalMenu ? 0 : 32, 15, regionalMenu ? 256 : 194, 193);
             Element cards = Crop(1, regionalMenu ? 0 : 22, 14, regionalMenu ? 256 : 214, 166);
@@ -3666,6 +3625,8 @@ int main(int argc, char** argv)
             const float menuX = viewWidth >= 300 ? 128 + viewWidth / 2 - 161 * menuScale - 2 : 131;
             sc.items.push_back({ 1, 4, 0, 161, 192, menuX, (192 - 192 * menuScale) / 2, menuScale, 0, 255, false });
             sc.items.back().border = !AutoFocus::Blank(screens[1].pixels);
+            sc.items.back().borderRadius = 3.0f;
+            sc.items.back().borderColor = 0x2A2E38;
         };
 
         // The safety net below must not flash up for the few frames in which the field map is
@@ -4268,6 +4229,8 @@ int main(int argc, char** argv)
                 balls.scale = 0.42f;
             }
             balls.border = viewWidth >= 300 && !AutoFocus::Blank(screens[1].pixels);
+            balls.borderRadius = 3.0f;
+            balls.borderColor = 0x2A2E38;
             sc.items.push_back(balls);
         }
         else if (appActive("NamingScreen"))
@@ -4647,7 +4610,7 @@ int main(int argc, char** argv)
     {
         M_RESUME, M_LAYOUT, M_LARGE, M_FPS60, M_FULLSCREEN, M_SMOOTH, M_WIDE, M_WIDEMAP, M_BATTLEBUTTONS,
         M_WIDELINES, M_AUTODETAIL, M_WIDEGPU, M_GPU3D, M_SHOWFPS, M_BUTTONS, M_PADTOUCH, M_EMULATION,
-        M_CONTROLS, M_TOUCHLAYOUT, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
+        M_CONTROLS, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
         M_DISPLAY, M_LANGUAGE, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
         M_VOLUME, M_FFMUTE, M_ASPECT, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_BOTHVER,
         M_RA_LIST, M_ACH_POINTS, M_ACH_STATUS, M_ACH_RARITY,
@@ -5001,17 +4964,8 @@ int main(int argc, char** argv)
         else if (menuPage == PAGE_CONTROLS)
         {
             add(M_CONTROLS, "KEYS AND BUTTONS", "");
-#ifdef SSR_PHONE
-            add(M_TOUCHLAYOUT, "TOUCH CONTROLS", "EDIT LAYOUT");
-#endif
             add(M_STARTBTN, "START BUTTON", cfg.startMenu ? "PAUSE MENU" : "DS START");
-#ifndef __SWITCH__
-            // (Nothing to choose on the Switch: its labels are the DS's positions.)
-            add(M_BUTTONS, "BUTTONS", cfg.byLabel ? "BY LABEL" : "BY POSITION");
-#endif
-#if !defined(__SWITCH__) && !defined(SSR_PHONE)
-            add(M_PADTOUCH, "STICK TOUCH CURSOR", onOff(cfg.padTouch)); // (the Switch and phones have touch screens)
-#endif
+            add(M_PADTOUCH, "STICK TOUCH CURSOR", onOff(cfg.padTouch));
             add(M_BACK, "BACK", "");
         }
     };
@@ -5117,14 +5071,7 @@ int main(int argc, char** argv)
     bool mouseDown = false;
     int mouseTapHold = 0;      // frames a click lasts at least (see SDL_MOUSEBUTTONDOWN)
     int mouseX = 0, mouseY = 0;
-    // On-screen controls (touch screens): shown while no controller is connected.
-    TouchPad touchPad;
-    const std::string touchLayoutPath = TouchLayout::Profile::Path(opt.config, "ds");
-    touchPad.profile.Load(touchLayoutPath);
-    bool touchPadUsed = false, touchMenuHeld = false, prevTouchMenu = false;
-#ifdef SSR_PHONE
-    touchPadUsed = true;
-#endif
+    bool touchMenuHeld = false, prevTouchMenu = false;
     // On a touch screen, the Pokedex's cover is pushed across as on the DS: a swipe to the left
     // from the right half of the closed cover opens it (A), and a swipe to the right from the left
     // half of the list closes it (B). (A quarter of the screen across, more across than down.)
@@ -5298,6 +5245,7 @@ int main(int argc, char** argv)
     // world are not drawn (rc_frame_hidden, rc_wide_render_skip), so it goes faster and shows
     // more frames. SSR_FF_FULL=1 draws them all, for comparing.
     static const bool ffFull = getenv("SSR_FF_FULL") != nullptr;
+    bool skipWide = false;
     auto runFrames = [&]() {
         const double t0 = perfNow();
         int filled = 0;
@@ -5305,7 +5253,7 @@ int main(int argc, char** argv)
         {
             // (The widescreen world drawn during a frame is shown after the next one.)
             rc_frame_hidden = !ffFull && emuSpeed > 1 && i < emuSpeed - 1;
-            rc_wide_render_skip = !ffFull && emuSpeed > 1 && i < emuSpeed - 2;
+            rc_wide_render_skip = (!ffFull && emuSpeed > 1 && i < emuSpeed - 2) || skipWide;
             rc_frame++;
             if (funcWatchOn) funcWatch.NextFrame();
             nds->RunFrame();
@@ -5427,14 +5375,6 @@ int main(int argc, char** argv)
                 snprintf(name, sizeof(name), "/window_%06u.png", j.frameNo);
                 WritePNG(opt.shotDir + name, back.data(), j.outW, j.outH);
             }
-        }
-        if (touchPadUsed && touchPad.visible)
-        {
-            // Lit by what the fingers hold (by label, as drawn).
-            bool held[PAD_COUNT] = {};
-            bool menuHeld = false;
-            touchPad.Apply(held, menuHeld);
-            touchPad.Draw(renderer, held, menuHeld);
         }
     };
     auto presentFrame = [&](DrawJob& j, bool pace) {
@@ -5735,7 +5675,6 @@ int main(int argc, char** argv)
         if (!opt.headless)
         {
             SDL_Event ev;
-            touchPad.NextFrame();
             // The pause menu takes taps on itself: a row is chosen and used at once (a setting
             // changes: the left part of the box back, the rest forward); a tap beside the box
             // closes the menu.
@@ -5840,30 +5779,6 @@ int main(int argc, char** argv)
                     // does when it wakes, and what a launch already does (#36).
                     SetClock(*nds, false);
                 }
-                else if (touchPadUsed && (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP))
-                {
-                    int ow = 0, oh = 0;
-                    SDL_GetRendererOutputSize(renderer, &ow, &oh);
-                    touchPad.Layout(ow, oh);
-                    float fx = ev.tfinger.x * ow, fy = ev.tfinger.y * oh;
-                    // The pause menu takes taps on itself: a row is chosen and used at once (a
-                    // setting changes: the left part of the box back, the rest forward); a tap
-                    // beside the box, away from the buttons, closes the menu.
-                    if (menu.open && ev.type == SDL_FINGERDOWN && (!touchPad.visible || touchPad.HitButton(fx, fy) == TouchPad::NONE))
-                    {
-                        menuTap(fx, fy);
-                        continue;
-                    }
-                    if (ev.type == SDL_FINGERDOWN)
-                    {
-                        // A finger on the screen brings the controls back (that finger only
-                        // touches the picture, see Down).
-                        touchPad.Down(ev.tfinger.fingerId, fx, fy);
-                        touchPad.visible = true;
-                    }
-                    else if (ev.type == SDL_FINGERMOTION) touchPad.Move(ev.tfinger.fingerId, fx, fy);
-                    else touchPad.Up(ev.tfinger.fingerId);
-                }
                 else if (ev.type == SDL_KEYDOWN && !ev.key.repeat)
                 {
                     SDL_Keycode k = ev.key.keysym.sym;
@@ -5934,15 +5849,6 @@ int main(int argc, char** argv)
                 }
                 else if (ev.type == SDL_WINDOWEVENT && ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
                     mouseDown = false;
-#ifdef SSR_PC_LAUNCHER
-                // (The size the window is given, kept for next time; not the screen's when fullscreen.)
-                else if (ev.type == SDL_WINDOWEVENT && ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED &&
-                         !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN))
-                {
-                    cfg.windowW = ev.window.data1;
-                    cfg.windowH = ev.window.data2;
-                }
-#endif
                 // A quick click can go down and up between two frames, and the game, which reads the
                 // touch screen once a frame, never saw it (the Pokeathlon's START did nothing): a
                 // click lasts at least 4 frames.
@@ -5987,36 +5893,6 @@ int main(int argc, char** argv)
             physPad = ps;
             ps = RemapPad(ps, cfg.controls, cfg.byLabel); // (CONTROLS)
             ctrlStart = ps.btn[PAD_START]; // (a controller's, before the on-screen buttons join in)
-            if (touchPadUsed)
-            {
-                touchPad.Layout(outW, outH);
-                // Using a controller hides them: a connected one is not proof enough, as
-                // Android reports some built-in keys as one.
-                bool padUsed = fabsf(ps.lx) > 0.5f || fabsf(ps.ly) > 0.5f;
-                for (int i = 0; i < PAD_COUNT; i++) padUsed |= ps.btn[i];
-                if (padUsed) touchPad.visible = false;
-                // A finger on the picture touches the game's touch screen, like the mouse.
-                float fx, fy;
-                mouseDown = touchPad.ScreenFinger(fx, fy);
-                if (mouseDown)
-                {
-                    mouseX = (int)fx;
-                    mouseY = (int)fy;
-                }
-                // The on-screen buttons go by their labels: the one marked A is the DS's A.
-                bool held[PAD_COUNT] = {};
-                touchPad.Apply(held, touchMenuHeld);
-                touchStart = held[PAD_START];
-                if (!cfg.byLabel)
-                {
-                    std::swap(held[PAD_A], held[PAD_B]);
-                    std::swap(held[PAD_X], held[PAD_Y]);
-                }
-                for (int i = 0; i < PAD_COUNT; i++) ps.btn[i] |= held[i];
-                if (touchMenuHeld && !prevTouchMenu) toggleMenu = true;
-                prevTouchMenu = touchMenuHeld;
-                if (touchPad.visible && touchPad.FastHeld()) kbFast = true; // (the >> button)
-            }
 
             const Uint8* kb = SDL_GetKeyboardState(nullptr);
             if (!menu.open)
@@ -6597,11 +6473,9 @@ int main(int argc, char** argv)
                 cfg.byLabel = !cfg.byLabel;
                 break;
 #endif
-#if !defined(__SWITCH__) && !defined(SSR_PHONE)
             case M_PADTOUCH:
                 cfg.padTouch = !cfg.padTouch;
                 break;
-#endif
 #if SSR_MENU_EMULATION
             case M_EMULATION:
                 // FAST JIT, JIT, INTERPRETER, and round again.
@@ -6612,12 +6486,6 @@ int main(int argc, char** argv)
                 say("APPLIES THE NEXT TIME THE GAME STARTS");
                 break;
 #endif
-            case M_TOUCHLAYOUT:
-                say(touchPad.EditLayout(renderer, touchLayoutPath) ? "TOUCH LAYOUT SAVED" : "TOUCH LAYOUT UNCHANGED");
-                mouseDown = false;
-                touchMenuHeld = prevTouchMenu = false;
-                navHoldOff = true;
-                break;
             case M_LANGUAGE:
             {
                 cfg.listLang = UiLang::NextChoice(dir);
@@ -6627,7 +6495,7 @@ int main(int argc, char** argv)
             case M_CONTROLS:
                 capturing = -1;
                 // (The keyboard's keys shown first when no controller is connected.)
-                ctlKeyboard = ctlHasKeyboard && pads.Empty() && !touchPadUsed;
+                ctlKeyboard = ctlHasKeyboard && pads.Empty();
                 goPage(PAGE_KEYS, -1);
                 menu.selected = ctlRow0;
                 hit = -1; // (the page is built: not again below)
@@ -6671,10 +6539,6 @@ int main(int argc, char** argv)
                 // A game chosen from the game list goes back to the list (the program starts
                 // again once this one has saved and closed); + there goes to the Homebrew Menu.
                 if (SwitchPlatform::CanChangeGame()) SwitchPlatform::ChangeGame();
-#endif
-#ifdef SSR_PC_LAUNCHER
-                // (The PC's all-games program likewise: QUIT goes back to its game list.)
-                if (PcLauncher::CanChangeGame()) PcLauncher::ChangeGame();
 #endif
                 running = false;
                 break;
@@ -6870,6 +6734,11 @@ int main(int argc, char** argv)
             // FAST FORWARD LOW RES on: it shows one frame in several, and the detail comes
             // straight back when it stops.
             if (speed > 1 && !opt.headless && cfg.ffLowRes) WideLinesNow = std::min(WideLinesNow, 360);
+#ifdef __SWITCH__
+            // In handheld mode the console's screen is 1280x720: drawing more than 720 lines is
+            // never seen on it and wastes fragment shading and memory bandwidth.
+            if (SwitchPlatform::IsHandheld()) WideLinesNow = std::min(WideLinesNow, 720);
+#endif
             if (wh > WideLinesNow)
             {
                 ww = ww * WideLinesNow / wh;
@@ -6898,6 +6767,10 @@ int main(int argc, char** argv)
             melonDS::Wide.Width = ww;
             melonDS::Wide.Height = wh;
             wideFrames = wantWide ? wideFrames + 1 : 0;
+            // When the current scene is a 2D menu or dual-screen spread, the 3D wide picture is
+            // not shown on screen: skip rendering it (rc_wide_render_skip) so the GPU is not
+            // wasting time on a discarded picture, while keeping Wide.Owner valid.
+            skipWide = !wantWide || (!scene.wide && !scene.edgeFill);
         }
         // Filled in after the frame has run: the renderer hands over its picture then.
         WideImage wideImage;
@@ -6949,7 +6822,7 @@ int main(int argc, char** argv)
             // while a cave's map loads behind the white of its warp, which showed black bars.)
             const int wideBright = (wideUnit.MasterBrightness >> 14) & 3;
             const bool fullFade = (wideBright == 1 || wideBright == 2) && (wideUnit.MasterBrightness & 0x1F) >= 16;
-            if (wideFrames > 3 && melonDS::Wide.Front && (show3D || fullFade))
+            if (wideFrames > 3 && melonDS::Wide.Front && (show3D || fullFade) && (scene.wide || scene.edgeFill))
             {
                 wideImage.pixels = melonDS::Wide.Front;
                 wideImage.w = melonDS::Wide.FrontW;
@@ -7998,19 +7871,42 @@ int main(int argc, char** argv)
             : rects[1];
         if (frame < cursorShownUntil && cursorRect.w > 0 && !paused)
         {
-            int cx = cursorRect.x + (int)(cursorX * cursorRect.w / 256);
-            int cy = cursorRect.y + (int)(cursorY * cursorRect.h / 192);
-            int arm = cursorRect.w / 40 + 3;
-            int t = outH / 360 + 1;
-            canvas.Fill(cx - arm - 1, cy - t - 1, arm * 2 + 3, t * 2 + 3, 0xFF000000);
-            canvas.Fill(cx - t - 1, cy - arm - 1, t * 2 + 3, arm * 2 + 3, 0xFF000000);
-            canvas.Fill(cx - arm, cy - t, arm * 2 + 1, t * 2 + 1, curPress ? 0xFFFFD75E : 0xFFFFFFFF);
-            canvas.Fill(cx - t, cy - arm, t * 2 + 1, arm * 2 + 1, curPress ? 0xFFFFD75E : 0xFFFFFFFF);
+            const int cx = cursorRect.x + (int)(cursorX * cursorRect.w / 256);
+            const int cy = cursorRect.y + (int)(cursorY * cursorRect.h / 192);
+            const int rad = std::max(6, cursorRect.w / 48);
+            const uint32_t ringCol = curPress ? 0xFFFFD75E : 0xFFFFFFFF;
+            const uint32_t shadowCol = 0xD010141C;
+            const int bound = rad + 3;
+            for (int dy = -bound; dy <= bound; dy++)
+            {
+                for (int dx = -bound; dx <= bound; dx++)
+                {
+                    const float d = std::sqrt((float)(dx * dx + dy * dy));
+                    if (d >= rad - 1.8f && d <= rad + 1.8f)
+                    {
+                        if (d >= rad - 0.9f && d <= rad + 0.9f)
+                            canvas.Fill(cx + dx, cy + dy, 1, 1, ringCol);
+                        else
+                            canvas.Fill(cx + dx, cy + dy, 1, 1, shadowCol);
+                    }
+                    else if (d <= 1.5f)
+                    {
+                        canvas.Fill(cx + dx, cy + dy, 1, 1, ringCol);
+                    }
+                }
+            }
+            const int tickLen = std::max(2, rad / 3);
+            for (int i = 1; i <= tickLen; i++)
+            {
+                canvas.Fill(cx, cy - rad - i, 1, 1, shadowCol);
+                canvas.Fill(cx, cy + rad + i, 1, 1, shadowCol);
+                canvas.Fill(cx - rad - i, cy, 1, 1, shadowCol);
+                canvas.Fill(cx + rad + i, cy, 1, 1, shadowCol);
+            }
             overlayUsed = true;
         }
-        // The top right corner, below the on-screen R button when those controls are shown
-        // (their top row ends at 12% of the height).
-        int cornerY = touchPadUsed && touchPad.visible ? outH * 13 / 100 : 0;
+        // The top right corner.
+        int cornerY = 0;
         int cornerInset = 0;
 #ifdef __ANDROID__
         // Full-screen phones may have rounded corners or a camera cutout on either side.
@@ -8056,6 +7952,15 @@ int main(int argc, char** argv)
             shoesRect[0] = x; shoesRect[1] = y; shoesRect[2] = w; shoesRect[3] = h;
             const int ox = (int)(view.originX + x * view.unit), oy = (int)(view.originY + y * view.unit);
             const int ow = (int)(w * view.unit), oh = (int)(h * view.unit);
+            const int tsc = std::max(1, outH / 360);
+            const int padPx = 3 * tsc;
+            // Backing container card for running shoes
+            canvas.Fill(ox - padPx, oy - padPx, ow + 2 * padPx, oh + 2 * padPx, 0xE0181A20);
+            canvas.Fill(ox - padPx - 1, oy - padPx - 1, ow + 2 * padPx + 2, 1, 0xFF2A2E38);
+            canvas.Fill(ox - padPx - 1, oy + oh + padPx, ow + 2 * padPx + 2, 1, 0xFF2A2E38);
+            canvas.Fill(ox - padPx - 1, oy - padPx - 1, 1, oh + 2 * padPx + 2, 0xFF2A2E38);
+            canvas.Fill(ox + ow + padPx, oy - padPx - 1, 1, oh + 2 * padPx + 2, 0xFF2A2E38);
+
             for (int py = 0; py < oh; py++)
             {
                 const int sy = std::min(SHOES_H - 1, py * SHOES_H / std::max(1, oh));
@@ -8065,19 +7970,18 @@ int main(int argc, char** argv)
                     canvas.Fill(ox + px, oy + py, 1, 1, shoesPix[sy * SHOES_W + sx]);
                 }
             }
-            const int tsc = std::max(1, outH / 360);
             const std::string label = std::string(pads.Empty() ? Controls::KeyName(cfg.controls.Key(Controls::Y))
                 : Controls::InputName(cfg.controls.Pad(Controls::Y, cfg.byLabel), Controls::StyleOf(pads.controllers.empty() ? nullptr : pads.controllers[0])))
                 + ": RUN " + (shoesOn ? "ON" : "OFF");
             const int tw = Canvas::TextWidth(label, tsc);
-            canvas.Fill(ox + (ow - tw) / 2 - 3 * tsc, oy + oh + 2 * tsc, tw + 6 * tsc, 11 * tsc, 0xC0000000);
-            canvas.Text(ox + (ow - tw) / 2, oy + oh + 4 * tsc, label, tsc, 0xFFFFFFFF);
+            const uint32_t statusCol = shoesOn ? 0xFF2EB85C : 0xFFE0A82C;
+            canvas.Fill(ox + (ow - tw) / 2 - 4 * tsc, oy + oh + 4 * tsc, tw + 8 * tsc, 12 * tsc, 0xE014161C);
+            canvas.Text(ox + (ow - tw) / 2, oy + oh + 6 * tsc, label, tsc, statusCol);
             overlayUsed = true;
         }
         // Platinum's Pokedex list: name the face buttons on SEARCH, SWITCH and CHECK, as the
-        // connected pad prints them (Xbox, PlayStation or Nintendo). Hidden with no pad, and
-        // on a phone while the on-screen buttons are up (Android's own keys look like a pad).
-        if (merged && !paused && g_ptDexBtns && !pads.Empty() && !(touchPadUsed && touchPad.visible))
+        // connected pad prints them (Xbox, PlayStation or Nintendo). Hidden with no pad.
+        if (merged && !paused && g_ptDexBtns && !pads.Empty())
         {
             const Element* body = nullptr;
             for (const Element& e : scene.items)
@@ -8117,10 +8021,7 @@ int main(int argc, char** argv)
         {
             int sc = outH / 240 < 1 ? 1 : outH / 240;
             const int tw = Canvas::TextWidth(toast, sc) + 8 * sc;
-            // With on-screen controls, centred below their top row (L, MENU and R end at
-            // 12% of the height) instead of under the L button.
-            const bool controls = touchPadUsed && touchPad.visible;
-            const int tx = controls ? (outW - tw) / 2 : 0, ty = controls ? outH * 13 / 100 : 0;
+            const int tx = 0, ty = 0;
             // Fading out over its last second.
             const uint32_t left = toastUntil - frame;
             const uint32_t fade = left >= 60 ? 255 : left * 255 / 60;
@@ -8132,19 +8033,18 @@ int main(int argc, char** argv)
         {
             // The buttons named as the controller in use has them (PlayStation's CROSS and CIRCLE,
             // ...), and as CONTROLS has them; with no controller, the keyboard's keys.
-            const bool kbOnly = pads.Empty() && !(touchPadUsed && touchPad.visible);
+            const bool kbOnly = pads.Empty();
             auto btn = [&](int a) {
                 return kbOnly ? std::string(a == Controls::A ? "ENTER" : "ESC")
                               : std::string(Controls::InputName(cfg.controls.Pad(a, cfg.byLabel),
                                     Controls::StyleOf(pads.controllers.empty() ? nullptr : pads.controllers[0])));
             };
-            std::string hint = touchPadUsed && touchPad.visible ? "TAP: CHOOSE   OUTSIDE: BACK"
-                               : btn(Controls::A) + ": SELECT   " + btn(Controls::B) + ": BACK";
+            std::string hint = btn(Controls::A) + ": SELECT   " + btn(Controls::B) + ": BACK";
             const int selId = menu.selected >= 0 && menu.selected < (int)menuIds.size() ? menuIds[menu.selected] : -1;
             static const char* pageTitle[] = { "", "KEYS AND BUTTONS", "DISPLAY", "GRAPHICS", "CONTROLS", "CHEATS", "RETROACHIEVEMENTS", "SOUND", "ACHIEVEMENTS", "ACHIEVEMENT", "SEARCH CHEATS", "CHEAT DETAILS", "DATABASE INFO", "SAVE BACKUPS", "RESTORE SAVE", "LOAD STATE" };
             if (menuPage == PAGE_KEYS)
             {
-                if (!(touchPadUsed && touchPad.visible)) hint = btn(Controls::A) + ": CHANGE   " + btn(Controls::B) + ": BACK";
+                hint = btn(Controls::A) + ": CHANGE   " + btn(Controls::B) + ": BACK";
                 if (capturing >= 0) hint = ctlKeyboard ? "ESC: LEAVE IT AS IT WAS" : "OR WAIT 5 SECONDS: AS IT WAS";
                 else if (menu.selected == 0 && ctlHasKeyboard) hint = "CHANGE: KEYBOARD OR CONTROLLER";
                 else if (const char* h = Controls::ActionHint(menu.selected - ctlRow0)) hint = h;
@@ -8178,11 +8078,10 @@ int main(int argc, char** argv)
                      : selId == M_RA_GAME ? "FOUND FROM THE ROM ITSELF" : "YOUR RETROACHIEVEMENTS ACCOUNT";
             if (selId == M_RA_LOGIN) hint = Achievements::LoggedIn() ? "FORGETS THE ACCOUNT HERE" : "YOUR USER NAME AND PASSWORD";
             if (selId == M_RA_TYPED)
-                hint = touchPadUsed ? "THEN TAP HERE OR DONE" : ctlHasKeyboard ? "ENTER: NEXT   ESC: CANCEL" : "TYPE IT  THEN A";
-            if (selId >= M_CHEAT0 && selId < M_ACH0 && !(touchPadUsed && touchPad.visible)) hint = btn(Controls::A) + ": ON / OFF   " + btn(Controls::B) + ": BACK";
+                hint = ctlHasKeyboard ? "ENTER: NEXT   ESC: CANCEL" : "TYPE IT  THEN A";
+            if (selId >= M_CHEAT0 && selId < M_ACH0) hint = btn(Controls::A) + ": ON / OFF   " + btn(Controls::B) + ": BACK";
             if (selId == M_CHEAT_ON || (selId >= M_CFOLDER0 && selId < M_CFOLDER0 + (int)cheats.folders.size()))
-                hint = (touchPadUsed && touchPad.visible) ? "TAP: OPEN   OUTSIDE: BACK"
-                     : btn(Controls::A) + ": OPEN   " + btn(Controls::B) + ": BACK";
+                hint = btn(Controls::A) + ": OPEN   " + btn(Controls::B) + ": BACK";
             if (selId == M_RA_LIST) hint = "WHAT EACH ASKS FOR";
             std::string note = selId >= M_CHEAT0 && selId < M_ACH0 && selId - M_CHEAT0 < (int)cheats.items.size() ? cheats.items[selId - M_CHEAT0].note : std::string();
             if (selId >= M_CHEAT0 && selId < M_ACH0 && selId - M_CHEAT0 < (int)cheats.items.size() && cheatWhere == -3)
@@ -8208,11 +8107,11 @@ int main(int argc, char** argv)
                 const std::string full = Cheats::Shown(achList[achDetail].title, 200);
                 title = full.size() > 30 ? full.substr(0, 28) + ".." : full;
                 note = (full.size() > 30 ? full + ": " : std::string()) + achList[achDetail].description;
-                hint = (touchPadUsed && touchPad.visible) ? "TAP OUTSIDE: BACK" : btn(Controls::B) + ": BACK";
+                hint = btn(Controls::B) + ": BACK";
             }
             if (menuPage == PAGE_RA_LIST)
             {
-                hint = (touchPadUsed && touchPad.visible) ? "TAP: DETAILS" : btn(Controls::A) + ": DETAILS   " + btn(Controls::B) + ": BACK";
+                hint = btn(Controls::A) + ": DETAILS   " + btn(Controls::B) + ": BACK";
                 if (selId >= M_ACH0 && selId - M_ACH0 < (int)achList.size())
                 {
                     const Achievements::Row& r = achList[selId - M_ACH0];
@@ -8483,9 +8382,6 @@ int main(int argc, char** argv)
     SwitchPlatform::Finish();
 #endif
     exitStep("done");
-#ifdef SSR_PC_LAUNCHER
-    PcLauncher::Finish();
-#endif
     if (opt.lockstep)
     {
         if (TraceFailed) return 1;

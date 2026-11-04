@@ -2,10 +2,14 @@
 # ssrecomp_nro target (CMakeLists.txt), so that whether there is an icon of your own is
 # decided when building, not when configuring.
 #
-# In: NACPTOOL, ELF2NRO, ELF, OUT, NACP, TITLE, VERSION, ICON (may be missing), DEFAULT_ICON,
+# In: NACPTOOL, ELF2NRO, ELF, OUT, NACP, TITLE, AUTHOR, VERSION, ICON (may be missing), DEFAULT_ICON,
 # ROMFS (a folder for the .nro's romfs, or empty).
 
-execute_process(COMMAND "${NACPTOOL}" --create "${TITLE}" "ssrecomp" "${VERSION}" "${NACP}"
+if(NOT DEFINED AUTHOR OR AUTHOR STREQUAL "")
+    set(AUTHOR "IamCarron")
+endif()
+
+execute_process(COMMAND "${NACPTOOL}" --create "${TITLE}" "${AUTHOR}" "${VERSION}" "${NACP}"
     RESULT_VARIABLE rc)
 if(rc)
     message(FATAL_ERROR "nacptool failed (${rc})")

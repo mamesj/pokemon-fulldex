@@ -1,3 +1,0 @@
-// The PC all-games program's resources on Windows: its manifest (UTF-8 file names).
-#include <winuser.h>
-CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "ssrecomp.manifest"

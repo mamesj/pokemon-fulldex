@@ -1,0 +1,94 @@
+# Builds the Nintendo Switch homebrew packages (.nro in zip archives) using devkitPro's
+# official devkita64 Docker image.
+#
+# No commercial ROMs or copyright game code are embedded; tables contain addresses and symbols only.
+# Manual run: Actions tab -> Nintendo Switch builds -> Run workflow.
+name: Nintendo Switch builds
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*', 'beta*' ]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Package to build'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'bw'
+          - 'platinum'
+          - 'everything'
+
+permissions:
+  contents: write
+
+jobs:
+  switch-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install host prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build git python3
+
+      - name: Build all-in-one NoSplitNX (nosplitnx.nro)
+        if: github.event_name == 'push' || github.event.inputs.target == 'all' || github.event.inputs.target == 'everything'
+        run: |
+          bash tools/switch/build_game.sh all
+
+      - name: Build standalone Black & White / Black 2 & White 2
+        if: github.event.inputs.target == 'bw' || github.event.inputs.target == 'everything'
+        run: |
+          bash tools/switch/build_game.sh bw
+
+      - name: Build standalone Platinum
+        if: github.event.inputs.target == 'platinum' || github.event.inputs.target == 'everything'
+        run: |
+          bash tools/switch/build_game.sh platinum
+
+      - name: Upload NoSplitNX package
+        if: github.event_name == 'push' || github.event.inputs.target == 'all' || github.event.inputs.target == 'everything'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nosplitnx-switch
+          path: build-sd/nosplitnx-switch.zip
+          if-no-files-found: warn
+
+      - name: Upload standalone Black & White 1 & 2 NROs
+        if: github.event.inputs.target == 'bw' || github.event.inputs.target == 'everything'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokemon-bw-standalone-switch
+          path: |
+            build-sd/pokemon-black2-white2-wide-switch.zip
+            build-sd/pokemon-black-white-wide-switch.zip
+          if-no-files-found: warn
+
+      - name: Upload standalone Platinum NRO
+        if: github.event.inputs.target == 'platinum' || github.event.inputs.target == 'everything'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pokemon-platinum-standalone-switch
+          path: build-sd/pokemon-platinum-wide-switch.zip
+          if-no-files-found: warn
+
+      - name: Create GitHub Release for Beta Tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          prerelease: true
+          name: "NoSplitNX ${{ github.ref_name }}"
+          files: |
+            build-sd/nosplitnx-switch.zip
+          generate_release_notes: true

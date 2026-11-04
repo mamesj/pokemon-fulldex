@@ -62,7 +62,7 @@ public:
             fclose(f);
         }
         on = IsGame(code, "IRBO") || IsGame(code, "IRAO");
-        regionalMenu = RegionalProfiles::Find(code) != nullptr;
+        regionalMenu = (BaseGameCode(code) != code) || (RegionalProfiles::Find(code) != nullptr);
         if (!on) return;
         Fw = &fw;
         auto find = [&](const char* name) {
@@ -210,6 +210,8 @@ public:
                         c.dx = viewRight - 2 - c.sw * c.scale;
                         c.dy = 147;
                         c.border = true;
+                        c.borderRadius = 3.0f;
+                        c.borderColor = 0x2A2E38;
                         sc.items.push_back(c);
                     }
                 }
@@ -446,6 +448,8 @@ private:
         const float y = (192 - h) / 2;
         sc.items.push_back(FillRect(x - pad, y - pad, (int)(w + 2 * pad), (int)(h + 2 * pad), 0x14141C));
         sc.items.back().border = true;
+        sc.items.back().borderRadius = 3.0f;
+        sc.items.back().borderColor = 0x2A2E38;
         for (Slot b : buttons)
         {
             b.crop.dx = x + b.col * (bw + gap);

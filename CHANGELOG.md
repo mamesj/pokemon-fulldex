@@ -3,9 +3,28 @@
 
 ## Unreleased
 
+- **Switch performance and dual-screen optimisation**: skip phantom 3D world rendering and multi-megabyte CPU frame copies while in 2D menus or dual-screen scenes (Bag, Party, Summary, Pokédex, spread layouts), clamp wide rendering to 720p maximum in handheld mode, and enable adaptive detail scaling by default on Switch.
+
+- **ROM hack compatibility and save isolation**: ROM hacks with custom internal IDs or modified region codes (such as Blaze Black, Volt White, Renegade Platinum, or custom difficulty hacks) are supported with 3-letter prefix fallbacks and companion `.code` override files. Hack titles are preserved in the launcher and saves are automatically isolated to `<rom_stem>.sav`, preventing hack ROMs from clashing with or overwriting vanilla game saves.
+
+- **Launcher save detection**: auto-detect existing saves matching the ROM's filename, base game title or fallback name when opening a game.
+
+- **Black 2 and White 2: battle questions keep their buttons** while waiting for an answer,
+  including switching Pokémon between opponents and choosing whether to continue after
+  fainting. The question stays full size, with its choices above it.
+
+- **Black, White, Black 2 and White 2: the Bag's messages stay readable** when selecting
+  or using an item, including teaching a TM. The item card moves below the message box
+  instead of covering its text, and includes the move's type, power, accuracy and PP.
+
+- Graduate Spanish Pokémon Black, White, Black 2 and White 2 to fully supported games with their own function tables, widescreen map expansion and uncropped title menus.
+
+- Nintendo Switch: add GitHub Actions workflow to build release packages, add a default Homebrew Menu icon, and allow building without requiring a SoulSilver ROM.
+
 - Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
   and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,
   diamond-de.sav, ...). Japanese Diamond and Pearl are not supported yet.
+
 - Cheats for the GBA games: CHEATS in their pause menu, 15 built in for Emerald, FireRed, LeafGreen and Ultra Violet (walk through walls, max money, Rare Candies, Master Balls, shiny encounters, always catch, infinite HP and PP, double EXP and more), all off until turned on; achievements pause while any is on, as for the DS games (`frontend/gba_cheats.h`).
 
 - Cheats built in for every DS game: 15 popular codes (walk through walls, max money, Rare Candies, Master Balls, shiny encounters, always catch, infinite HP and PP, double EXP and more) in a POPULAR CHEATS folder under CHEATS, for US, European, Spanish, German, French and Italian versions. All are off until turned on. From DeadSkullzJr's database via libretro-database (`tools/cheats/make_builtin_cheats.py`).

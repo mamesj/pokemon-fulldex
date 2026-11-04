@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 
 #include "ui.h"
+#include "switch_platform.h"
 // (JPEG and PNG pictures for the list: the program that draws it defines STB_IMAGE_IMPLEMENTATION
 // with STBI_ONLY_JPEG and STBI_ONLY_PNG before including this, in one file.)
 #include "thirdparty/stb_image.h"
@@ -90,12 +91,16 @@ inline const KnownGame* Known(const std::string& code)
 {
     static const KnownGame games[] = {
         { "IRBO", "Pokemon Black", "black.sav" },
+        { "IRBS", "Pokemon Black (ES)", "black-es.sav" },
         { "IRBF", "Pokemon Black (FR)", "black-fr.sav" },
         { "IRAO", "Pokemon White", "white.sav" },
+        { "IRAS", "Pokemon White (ES)", "white-es.sav" },
         { "IRAF", "Pokemon White (FR)", "white-fr.sav" },
         { "IREO", "Pokemon Black 2", "black2.sav" },
+        { "IRES", "Pokemon Black 2 (ES)", "black2-es.sav" },
         { "IREF", "Pokemon Black 2 (FR)", "black2-fr.sav" },
         { "IRDO", "Pokemon White 2", "white2.sav" },
+        { "IRDS", "Pokemon White 2 (ES)", "white2-es.sav" },
         { "IRDF", "Pokemon White 2 (FR)", "white2-fr.sav" },
         { "IPKE", "Pokemon HeartGold", "heartgold.sav" },
         { "IPKF", "Pokemon HeartGold (FR)", "heartgold-fr.sav" },
@@ -104,7 +109,6 @@ inline const KnownGame* Known(const std::string& code)
         { "CPUE", "Pokemon Platinum", "platinum.sav" },
         { "ADAE", "Pokemon Diamond (Experimental)", "diamond.sav" },
         { "APAE", "Pokemon Pearl (Experimental)", "pearl.sav" },
-        { "IRAS", "Pokemon White (ES)", "white-es.sav" },
         { "CPUS", "Pokemon Platinum (ES)", "platinum-es.sav" },
         { "IPGS", "Pokemon SoulSilver (ES)", "soulsilver-es.sav" },
         { "IPKS", "Pokemon HeartGold (ES)", "heartgold-es.sav" },
@@ -137,6 +141,35 @@ inline int Order(const std::string& code)
     for (int i = 0; i < n; i++)
         if (base == order[i]) return i;
     return n;
+}
+
+// Returns the English base code if a code's first 3 letters match a known DS Pokémon game.
+inline const char* HackBaseCode(const std::string& code)
+{
+    if (code.size() != 4) return nullptr;
+    if (code.rfind("IRB", 0) == 0) return "IRBO";
+    if (code.rfind("IRA", 0) == 0) return "IRAO";
+    if (code.rfind("IRE", 0) == 0) return "IREO";
+    if (code.rfind("IRD", 0) == 0) return "IRDO";
+    if (code.rfind("IPG", 0) == 0) return "IPGE";
+    if (code.rfind("IPK", 0) == 0) return "IPKE";
+    if (code.rfind("CPU", 0) == 0) return "CPUE";
+    if (code.rfind("ADA", 0) == 0) return "ADAE";
+    if (code.rfind("APA", 0) == 0) return "APAE";
+    return nullptr;
+}
+
+inline bool IsCustomHackTitle(const std::string& name)
+{
+    std::string upper;
+    for (char c : name) upper += (char)toupper((unsigned char)c);
+    static const char* const tags[] = {
+        "BLAZE", "VOLT", "RENEGADE", "SACRED", "STORM", "REDUX", "RANDOM", "HACK",
+        "KAIZO", "VINTAGE", "MOON", "SUN", "SHINING", "LUMINESCENT", "PLUS", "DARK"
+    };
+    for (const char* tag : tags)
+        if (upper.find(tag) != std::string::npos) return true;
+    return false;
 }
 
 // A name as the list has it (POKEMON EMERALD) as a title: Pokemon Emerald (FireRed and LeafGreen
@@ -216,20 +249,89 @@ inline bool ReadGame(const std::string& rom, const std::string& folder, Game& g)
     }
     fclose(f);
     if (!ok) return false;
-    if (const KnownGame* k = Known(g.code))
+
+    // Check for companion code override file (.code beside the ROM or in the saves folder)
+    // allowing hacks with custom IDs (like BB2E, VW2E, etc.) to specify their base game profile:
+    const std::string romBase = rom.substr(rom.find_last_of('/') + 1);
+    const size_t dot = romBase.find_last_of('.');
+    const std::string stem = (dot != std::string::npos) ? romBase.substr(0, dot) : romBase;
+    const std::string romDir = (rom.find_last_of('/') != std::string::npos) ? rom.substr(0, rom.find_last_of('/')) : folder;
+    for (const std::string& path : { romDir + "/" + stem + ".code", folder + "/" + stem + ".code" })
+    {
+        FILE* cf = fopen(path.c_str(), "r");
+        if (cf)
+        {
+            char codeBuf[16] = {};
+            if (fscanf(cf, "%4s", codeBuf) == 1 && strlen(codeBuf) == 4)
+                g.code = codeBuf;
+            fclose(cf);
+            break;
+        }
+    }
+
+    const std::string banTitle = g.name;
+    const KnownGame* k = Known(g.code);
+    if (!k)
+    {
+        if (const char* base = HackBaseCode(g.code))
+            k = Known(base);
+    }
+
+    const bool isHack = (!Known(g.code) && HackBaseCode(g.code) != nullptr) ||
+                        IsCustomHackTitle(banTitle) || IsCustomHackTitle(stem);
+
+    if (k)
     {
         g.known = true;
-        g.name = k->name;
+        if (isHack && !banTitle.empty() && IsCustomHackTitle(banTitle))
+            g.name = banTitle;
+        else if (isHack && IsCustomHackTitle(stem))
+            g.name = stem;
+        else
+            g.name = k->name;
         g.saveName = k->save;
     }
     else
     {
-        if (g.name.empty()) g.name = rom.substr(rom.find_last_of('/') + 1);
-        g.saveName = "game.sav";
+        if (g.name.empty()) g.name = stem;
+        g.saveName = stem + ".sav";
     }
     for (char& c : g.name) c = (char)toupper((unsigned char)c);
+
     struct stat st;
-    g.hasSave = stat((folder + "/" + g.saveName).c_str(), &st) == 0;
+    // For ROM hacks or games with existing custom saves, isolate save files so vanilla playthroughs
+    // are never overwritten:
+    if (stat((folder + "/" + stem + ".sav").c_str(), &st) == 0)
+    {
+        g.saveName = stem + ".sav";
+        g.hasSave = true;
+    }
+    else if (isHack)
+    {
+        g.saveName = stem + ".sav";
+        g.hasSave = stat((folder + "/" + g.saveName).c_str(), &st) == 0;
+    }
+    else
+    {
+        g.hasSave = stat((folder + "/" + g.saveName).c_str(), &st) == 0;
+        if (!g.hasSave)
+        {
+            // If the regional save name does not exist yet, look for common existing alternatives
+            // (such as <rom_stem>.sav, the unregionalised name e.g. black2.sav, or game.sav):
+            const size_t dash = g.saveName.find('-');
+            const std::string baseSave = (dash != std::string::npos) ? g.saveName.substr(0, dash) + ".sav" : "";
+            for (const std::string& candidate : { stem + ".sav", baseSave, std::string("game.sav") })
+            {
+                if (!candidate.empty() && candidate != g.saveName &&
+                    stat((folder + "/" + candidate).c_str(), &st) == 0)
+                {
+                    g.saveName = candidate;
+                    g.hasSave = true;
+                    break;
+                }
+            }
+        }
+    }
     return true;
 }
 
@@ -748,20 +850,47 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
     c.Fill(0, 0, c.w, c.h, th.bg);
     if (th.background)
         if (const uint32_t* bgPx = th.background->Fitted(c.w, c.h)) std::copy(bgPx, bgPx + (size_t)c.w * c.h, c.px.begin());
-    // A band along the top with the title.
+    // A band along the top with the title and Switch status.
     c.Fill(0, 0, c.w, (c.h > c.w ? 43 : 22) * s, th.band);
     c.Fill(0, (c.h > c.w ? 43 : 22) * s, c.w, th.bandLineH * s, th.bandLine);
-    const std::string title = "POK\x05MON FULLDEX"; // (Pokémon Fulldex: \x05 is the font's É, ui.h)
+    const std::string title = "NOSPLIT NX";
     c.Text((c.w - Canvas::TextWidth(title, s + 1)) / 2, 6 * s, title, s + 1, th.title);
-    // The tabs: the chosen one bright and underlined.
+#ifdef __SWITCH__
+    int yr = 0, mo = 0, dy = 0, hr = 0, mn = 0, sc = 0;
+    if (SwitchPlatform::LocalTime(yr, mo, dy, hr, mn, sc))
+    {
+        char timeBuf[16];
+        snprintf(timeBuf, sizeof(timeBuf), "%02d:%02d", hr, mn);
+        const std::string clockStr = timeBuf;
+        const int clockX = c.w - Canvas::TextWidth(clockStr, s) - 10 * s;
+        c.Text(clockX, 6 * s, clockStr, s, th.title);
+        const std::string modeStr = SwitchPlatform::IsHandheld() ? "HANDHELD" : "TV";
+        const int modeX = clockX - Canvas::TextWidth(modeStr, std::max(1, s - 1)) - 8 * s;
+        c.Text(modeX, 7 * s, modeStr, std::max(1, s - 1), th.hint);
+    }
+#endif
+    // The tabs: modern clean pills for selected tab.
+    const int firstTabX = TabX(c, grid, 0) - Canvas::TextWidth(TabName(0), s) / 2;
+    c.Text(firstTabX - Canvas::TextWidth("[L] ", s), grid.tabsY + 3 * s, "[L] ", s, th.hint);
     for (int t = 0; t < TABS; t++)
     {
         const std::string name = TabName(t);
-        const int x = TabX(c, grid, t) - Canvas::TextWidth(name, s) / 2, y = grid.tabsY + 3 * s;
-        if (onTabs && t == tab) c.Fill(x - 3 * s, y - 3 * s, Canvas::TextWidth(name, s) + 5 * s, 13 * s, th.frame);
-        c.Text(x, y, name, s, t == tab ? th.title : th.hint);
-        if (t == tab) c.Fill(x - 2 * s, grid.tabsY + grid.tabsH - s, Canvas::TextWidth(name, s) + 3 * s, s, th.frame);
+        const int nameW = Canvas::TextWidth(name, s);
+        const int x = TabX(c, grid, t) - nameW / 2, y = grid.tabsY + 3 * s;
+        if (t == tab)
+        {
+            if (onTabs) c.Fill(x - 4 * s, y - 2 * s, nameW + 8 * s, 12 * s, th.frame);
+            else c.Fill(x - 3 * s, y - 2 * s, nameW + 6 * s, 12 * s, 0xFF24242A);
+            c.Text(x, y, name, s, th.title);
+            c.Fill(x - 2 * s, grid.tabsY + grid.tabsH - s, nameW + 4 * s, s, th.frame);
+        }
+        else
+        {
+            c.Text(x, y, name, s, th.hint);
+        }
     }
+    const int lastTabX = TabX(c, grid, TABS - 1) + Canvas::TextWidth(TabName(TABS - 1), s) / 2;
+    c.Text(lastTabX + 4 * s, grid.tabsY + 3 * s, " [R]", s, th.hint);
 
     FollowSelection(v, selected, scroll, follow);
     const int top = grid.top, bottom = grid.bottom, tile = grid.tile, labelH = grid.labelH;
@@ -791,8 +920,12 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
         if (y < top || y + tile + labelH > bottom) continue;
         const Game& g = games[sp.game];
         const bool sel = sp.game == selected;
-        // A frame round the chosen one.
-        if (sel) c.Fill(x - th.frameW * s, y - th.frameW * s, tile + 2 * th.frameW * s, tile + 2 * th.frameW * s, th.frame);
+        // A clean double-ring highlight frame round the chosen one.
+        if (sel)
+        {
+            c.Fill(x - (th.frameW + 1) * s, y - (th.frameW + 1) * s, tile + 2 * (th.frameW + 1) * s, tile + 2 * (th.frameW + 1) * s, (th.frame & 0x00FFFFFF) | 0x40000000);
+            c.Fill(x - th.frameW * s, y - th.frameW * s, tile + 2 * th.frameW * s, tile + 2 * th.frameW * s, th.frame);
+        }
         c.Fill(x, y, tile, tile, th.tile);
         if (!g.art.empty())
         {
@@ -815,6 +948,16 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
                 for (int px = 0; px < 32; px++)
                     if (g.icon[py * 32 + px] >> 24) c.Fill(x + o + px * is, y + o + py * is, is, is, g.icon[py * 32 + px]);
         }
+        // Platform badge on the game tile
+        const char* platBadge = g.platform == GBA ? "GBA" : "NDS";
+        const uint32_t badgeColor = g.platform == GBA ? 0xFF9B4DE0 : 0xFF2A7BE0;
+        const int bScale = std::max(1, s - 1);
+        const int bW = Canvas::TextWidth(platBadge, bScale) + 4 * bScale;
+        const int bH = 8 * bScale;
+        c.Fill(x + 3 * s, y + 3 * s, bW, bH, 0xCC101014);
+        c.Fill(x + 3 * s, y + 3 * s + bH - 1, bW, 1, badgeColor);
+        c.Text(x + 3 * s + 2 * bScale, y + 3 * s + 1, platBadge, bScale, badgeColor);
+
         // COMING SOON across the picture of a game on its way, the picture darkened.
         if (g.comingSoon)
         {
@@ -838,12 +981,16 @@ inline void Draw(Canvas& c, const std::vector<Game>& games, int tab, int selecte
         std::string sub = g.comingSoon ? "COMING SOON" : !g.known ? "NOT PLAYABLE" : g.hasSave ? "SAVE FOUND" : "NEW GAME";
         if (!g.where.empty() && g.known) sub = (g.hasSave ? "SAVE " : "NEW ") + g.where; // e.g. SAVE IN BLACK2
         const int ss = std::max(1, s * 2 / 3);
-        c.Text(x + (tile - Canvas::TextWidth(sub, ss)) / 2, y + tile + (UiLang::Tall() ? 19 : 12) * s, sub, ss, !g.known && !g.comingSoon ? th.bad : sel ? th.subSel : th.sub);
+        const uint32_t subColor = !g.known && !g.comingSoon ? th.bad
+                               : g.comingSoon ? th.hint
+                               : g.hasSave ? 0xFF2EB85C   // soft green for existing save
+                               : 0xFFE0A82C;              // warm gold for new game
+        c.Text(x + (tile - Canvas::TextWidth(sub, ss)) / 2, y + tile + (UiLang::Tall() ? 19 : 12) * s, sub, ss, subColor);
     }
     // More games below the ones shown. (None drawn for above: under the tabs it looked like one
     // of their underlines, and the cut tiles at the top say it already.)
     if (scroll + (bottom - top) < v.height - grid.gap) c.Fill(c.w / 2 - 8 * s, bottom - 2 * s, 16 * s, s, th.hint);
-    const std::string hint = !note.empty() ? note : !hintText.empty() ? hintText : "A: PLAY    Y: SETTINGS    L / R: TABS    +: QUIT";
+    const std::string hint = !note.empty() ? note : !hintText.empty() ? hintText : "A: PLAY   Y: SETTINGS   X: RANDOM   L / R: TABS   +: QUIT";
     int hintScale=s;
         while(hintScale>1 && Canvas::TextWidth(hint,hintScale)>c.w-8)--hintScale;
     c.Text((c.w - Canvas::TextWidth(hint, hintScale)) / 2, c.h - 12 * s, hint, hintScale, th.hint);
@@ -944,22 +1091,8 @@ inline std::vector<Setting> SettingsList()
     l.push_back({ "start_button", "START BUTTON", { { "menu", "PAUSE MENU" }, { "ds", "DS START" } }, "ds",
                   "DS START: START ON A CONTROLLER IS THE DS START; THE XBOX / PS BUTTON, OR START AND BACK TOGETHER, OPEN THE PAUSE MENU. PAUSE MENU: START (MENU ON XBOX / OPTIONS ON PS) OPENS IT. ENTER IS ALWAYS THE DS START." });
 #endif
-#ifndef __SWITCH__
-    l.push_back({ "buttons", "BUTTONS", { { "labels", "BY LABEL" }, { "positions", "BY POSITION" } }, "labels",
-                  "BY LABEL: THE BUTTON MARKED A IS THE DS A ON ANY CONTROLLER. BY POSITION: THE BUTTONS WHERE A DS HAS THEM (XBOX A IS DS B)." });
-#ifndef SSR_PHONE
-    l.push_back({ "pad_touch", "STICK TOUCH CURSOR", onOff, "0", "ON: THE RIGHT STICK MOVES A CURSOR ON THE TOUCH SCREEN AND THE LEFT TRIGGER PRESSES IT." });
-    // (frontend/shortcuts.h, made by the game list: pc_launcher.cpp. Not on a Mac: its Dock and
-    // Launchpad start the app itself.)
-#if defined(_WIN32)
-    l.push_back({ "!shortcuts", "DESKTOP SHORTCUTS", { { "", "CREATE" } }, "",
-                  "PUTS A SHORTCUT FOR EACH GAME IN THIS LIST ON YOUR DESKTOP WITH ITS PICTURE. IT STARTS THAT GAME STRAIGHT AWAY (QUIT IN THE PAUSE MENU STILL COMES BACK TO THIS LIST). CREATE AGAIN AFTER ADDING GAMES OR MOVING THIS FOLDER." });
-#elif !defined(__APPLE__)
-    l.push_back({ "!shortcuts", "DESKTOP SHORTCUTS", { { "", "CREATE" } }, "",
-                  "PUTS A SHORTCUT FOR EACH GAME IN THIS LIST ON YOUR DESKTOP AND IN YOUR APPS MENU WITH ITS PICTURE. IT STARTS THAT GAME STRAIGHT AWAY. ON THE STEAM DECK THEY ALSO SHOW UP IN ADD A NON-STEAM GAME. CREATE AGAIN AFTER ADDING GAMES OR MOVING THIS FOLDER." });
-#endif
-#endif
-#endif
+    l.push_back({ "pad_touch", "STICK TOUCH CURSOR", onOff, "1",
+                  "ON: THE RIGHT STICK MOVES A CURSOR ON THE TOUCH SCREEN AND THE LEFT TRIGGER PRESSES IT (RECOMMENDED FOR TV / DOCKED MODE)." });
 #if defined(__SWITCH__) && defined(SSR_ALL_GAMES)
     // (frontend/switch_forwarder.cpp, made by the game list: switch_platform.cpp.)
     l.push_back({ "!forwarders", "HOME MENU ICONS", { { "", "INSTALL" } }, "",

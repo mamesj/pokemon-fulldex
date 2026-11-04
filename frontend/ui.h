@@ -281,7 +281,7 @@ struct Menu
         drawnFirstY = by + (hasTitle ? lineH : 0) + 5 * scale - 2 * scale;
 
         c.Fill(0, 0, c.w, c.h, 0xA0000000);
-        c.Fill(bx - scale, by - scale, boxW + 2 * scale, boxH + 2 * scale, 0xFFE8E8E8);
+        c.Fill(bx - scale, by - scale, boxW + 2 * scale, boxH + 2 * scale, 0xFF2A2E38);
         c.Fill(bx, by, boxW, boxH, boxCol);
         if (hasTitle) c.Text(bx + (boxW - Canvas::TextWidth(title, scale)) / 2, by + 3 * scale, title, scale, 0xFFFFD75E);
 
@@ -317,7 +317,7 @@ struct Menu
         if (!noteLines.empty())
         {
             const int ny = by + boxH + 3 * scale;
-            c.Fill(bx - scale, ny - scale, boxW + 2 * scale, noteH + 2 * scale, 0xFFE8E8E8);
+            c.Fill(bx - scale, ny - scale, boxW + 2 * scale, noteH + 2 * scale, 0xFF2A2E38);
             c.Fill(bx, ny, boxW, noteH, noteBox);
             for (size_t i = 0; i < noteLines.size(); i++)
                 c.TextRaw(bx + 6 * scale, ny + 4 * scale + (int)i * UiLang::LineUnits() * scale, noteLines[i], scale, textCol);

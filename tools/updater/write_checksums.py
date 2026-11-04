@@ -21,9 +21,15 @@ def write(directory, builds):
         supplied[asset]=epoch
     lines=[]
     for asset in sorted(directory.iterdir()):
-        if not asset.is_file() or not asset.name.startswith('pokemon-ds-wide-'): continue
+        if not asset.is_file() or not (asset.name.startswith('nosplitnx-') or asset.name.startswith('pokemon-')): continue
         if not asset.name.endswith(('.zip','.tar.gz','.AppImage','.apk','.ipa')): continue
-        digest=hashlib.file_digest(asset.open('rb'),'sha256').hexdigest()
+        h = hashlib.sha256()
+        with asset.open('rb') as f:
+            while True:
+                chunk = f.read(65536)
+                if not chunk: break
+                h.update(chunk)
+        digest = h.hexdigest()
         lines.append(digest+'  '+asset.name)
         epoch=supplied.get(asset.name)
         if epoch is None and previous.get(asset.name)==digest: epoch=versions.get(asset.name)

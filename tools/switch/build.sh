@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds ssrecomp for the Nintendo Switch (an .nro for the Homebrew Menu) from your own ROM.
+# Builds NoSplitNX for the Nintendo Switch (an .nro for the Homebrew Menu) from your own ROM.
 #
 #   tools/switch/build.sh [your-soulsilver-us.nds]
 #
@@ -15,7 +15,7 @@
 # of generated tables given in SSR_SWITCH_GEN (e.g. gen-tables, made by
 # tools/soulsilver/tables_only.py: everything but the recompiled code, so the build takes a
 # couple of minutes and the .nro is small), into build-switch-jit unless SSR_SWITCH_BUILD says
-# otherwise. SSR_NRO_TITLE: the title in the Homebrew Menu (ssrecomp by default). SSR_SWITCH_ROMFS:
+# otherwise. SSR_NRO_TITLE: the title in the Homebrew Menu (NoSplitNX by default). SSR_SWITCH_ROMFS:
 # a folder for the .nro's romfs (the all-games build's function tables for the Black games).
 set -euo pipefail
 
@@ -45,7 +45,7 @@ for tool in cmake ninja; do
 done
 
 # The game's code, generated from the ROM (once).
-if [ ! -f gen/sources.cmake ]; then
+if [ ! -f "$GEN/sources.cmake" ]; then
     ROM="${1:-}"
     [ -n "$ROM" ] || fail "gen/ is missing: give your SoulSilver (US) ROM, e.g. tools/switch/build.sh ~/soulsilver.nds"
     [ -f "$ROM" ] || fail "no such file: $ROM"
@@ -95,7 +95,7 @@ if [ "$JIT" = 1 ]; then
         -DCMAKE_TOOLCHAIN_FILE="$DEVKITPRO/cmake/Switch.cmake" \
         -DCMAKE_BUILD_TYPE=Release \
         -DSSR_GENERATED_DIR="$GEN" \
-        -DSSR_NRO_TITLE="${SSR_NRO_TITLE:-ssrecomp}" \
+        -DSSR_NRO_TITLE="${SSR_NRO_TITLE:-NoSplitNX}" \
         -DSSR_SWITCH_ROMFS="${SSR_SWITCH_ROMFS:-}" \
         -DSSR_ALL_GAMES="${SSR_ALL_GAMES:-OFF}" \
         -DSSR_PC_ART="${SSR_PC_ART:-}" \
@@ -116,9 +116,9 @@ NRO="$BUILD/ssrecomp.nro"
 say "Done: $NRO ($(du -h "$NRO" | cut -f1))"
 cat <<EOF
 
-On the Switch's SD card, make the folder /switch/ssrecomp/ and copy into it:
-  - $NRO
+On the Switch's SD card, make the folder /switch/nosplitnx/ and copy into it:
+  - $NRO (renamed to nosplitnx.nro)
   - your ROM, renamed to rom.nds
-Then hold R while starting any game, and choose ssrecomp in the Homebrew Menu.
-The save (soulsilver.sav), settings (ssrecomp.cfg) and game.log are written to that folder.
+Then hold R while starting any game, and choose NoSplitNX in the Homebrew Menu.
+The save (soulsilver.sav), settings (settings.cfg) and game.log are written to that folder.
 EOF

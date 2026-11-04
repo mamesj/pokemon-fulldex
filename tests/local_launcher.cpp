@@ -104,6 +104,26 @@ int main() {
     assert(!PrepareLaunch(game).empty());
     fs::permissions(root/"saves",fs::perms::owner_all);
     game.rom=(root/"missing.nds").string(); assert(!PrepareLaunch(game).empty());
+
+    // HackROM companion .code file and save isolation test:
+    memcpy(rom.data() + 12, "BB2E", 4);
+    write("BlazeBlack.nds", rom.size());
+    { std::ofstream out(root / "BlazeBlack.code"); out << "IREO\n"; }
+    { std::ofstream out(root / "saves" / "black2.sav"); out << "VANILLA-BLACK2-SAVE"; }
+    Launcher::Game hackGame;
+    assert(Launcher::ReadGame((root / "BlazeBlack.nds").string(), (root / "saves").string(), hackGame));
+    assert(hackGame.code == "IREO");
+    assert(hackGame.known);
+    assert(hackGame.saveName == "BlazeBlack.sav"); // Preserves save isolation, does not touch black2.sav!
+
+    // HackROM 3-letter prefix fallback test:
+    memcpy(rom.data() + 12, "IREX", 4);
+    write("Pokemon Black 2 Hack.nds", rom.size());
+    Launcher::Game prefixGame;
+    assert(Launcher::ReadGame((root / "Pokemon Black 2 Hack.nds").string(), (root / "saves").string(), prefixGame));
+    assert(prefixGame.known);
+    assert(prefixGame.saveName == "Pokemon Black 2 Hack.sav");
+
     // Only this test's synthetic files are removed.
     fs::remove_all(root);
     std::cout << "PASS: ROM bounds, image limits, portrait/landscape layout, launch errors and save backup\n";

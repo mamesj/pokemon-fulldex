@@ -50,9 +50,9 @@ namespace Updater
 {
 namespace
 {
-const char* const kReleases = "https://api.github.com/repos/mamesj/pokemon-fulldex/releases?per_page=30";
-const char* const kDownloads = "https://github.com/mamesj/pokemon-fulldex/releases/download/";
-const char* const kAgent = "PokemonFulldex-Updater";
+const char* const kReleases = "https://api.github.com/repos/IamCarron/NoSplitNX/releases?per_page=30";
+const char* const kDownloads = "https://github.com/IamCarron/NoSplitNX/releases/download/";
+const char* const kAgent = "NoSplitNX-Updater";
 // ---------------------------------------------------------------------------------------------
 // SHA-256 (FIPS 180-4).
 
@@ -316,7 +316,7 @@ const char* AssetName()
 #elif defined(_WIN32)
     return "pokemon-ds-wide-pc-windows-x86_64.zip";
 #elif defined(__SWITCH__)
-    return "pokemon-ds-wide-all-switch.zip";
+    return "nosplitnx-switch.zip";
 #elif defined(__linux__) && !defined(__ANDROID__)
 #if defined(__aarch64__)
     return KindOf() == Kind::AppImage ? "pokemon-ds-wide-pc-linux-aarch64.AppImage" : "pokemon-ds-wide-pc-linux-aarch64.tar.gz";
@@ -678,7 +678,8 @@ void RunInstall()
         fs::remove_all(fs::u8path(unpacked), ec);
         fs::create_directories(fs::u8path(unpacked), ec);
         const std::string nroName = g_program.substr(g_program.find_last_of('/') + 1);
-        if (!UnzipFolder(data, "switch/pokemon-ds-wide/", nroName, unpacked, error))
+        if (!UnzipFolder(data, "switch/nosplitnx/", nroName, unpacked, error) &&
+            !UnzipFolder(data, "switch/pokemon-ds-wide/", nroName, unpacked, error))
         {
             fprintf(stderr, "[update] %s\n", error.c_str());
             fs::remove_all(fs::u8path(unpacked), ec);
@@ -962,7 +963,7 @@ std::string Choose()
     if (s.state == State::Checking || s.state == State::Downloading || s.state == State::Installed) return "";
     if (s.state == State::Available)
     {
-        if (!s.canInstall) return s.page.empty() ? "https://github.com/mamesj/pokemon-fulldex/releases" : s.page;
+        if (!s.canInstall) return s.page.empty() ? "https://github.com/IamCarron/NoSplitNX/releases" : s.page;
         Spawn([](bool) { RunInstall(); }, false);
         return "";
     }

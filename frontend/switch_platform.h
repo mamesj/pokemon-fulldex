@@ -25,6 +25,12 @@ void JitStarted();
 // The console's own date and time, in the time zone set on it. False if it cannot be read.
 bool LocalTime(int& year, int& month, int& day, int& hour, int& minute, int& second);
 
+// The system language set on the console ("en", "es", "ja", "fr", "de", "it", "ko", etc.).
+const char* SystemLanguage();
+
+// Whether the console is in handheld or tabletop mode (its own screen, 720p) rather than docked.
+bool IsHandheld();
+
 // For the timing lines in the log, in test runs only (empty otherwise): the processor,
 // graphics and memory clocks and the chip's and the board's temperature right now, as text.
 std::string Status();

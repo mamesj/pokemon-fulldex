@@ -37,8 +37,8 @@
 # switch-dev and switch-sdl2. When devkitPro is not installed but Docker is, its official image
 # (devkitpro/devkita64) is used instead: their servers refuse some IP addresses (403).
 # SSR_SWITCH_ICON=path/to/icon.jpg (256x256 JPEG) gives the game your own Homebrew Menu icon
-# (for bw: SSR_SWITCH_ICON_BLACK2, SSR_SWITCH_ICON_WHITE2, SSR_SWITCH_ICON_BLACK and
-# SSR_SWITCH_ICON_WHITE, one each; for hgss:
+# (defaults to tools/switch/icon.jpg; for bw: SSR_SWITCH_ICON_BLACK2, SSR_SWITCH_ICON_WHITE2,
+# SSR_SWITCH_ICON_BLACK and SSR_SWITCH_ICON_WHITE, one each; for hgss:
 # SSR_SWITCH_ICON_SOULSILVER and SSR_SWITCH_ICON_HEARTGOLD).
 #
 # Keep funcs.txt (black2, white2, black, white) to yourself: it is made from your ROM. Never share a
@@ -72,9 +72,13 @@ case "$GAME" in
     *) fail "which game? tools/switch/build_game.sh soulsilver|hgss|all|black2|white2|black|white your-rom.nds (or bw or platinum, no ROM)" ;;
 esac
 if [ "$GAME" != bw ] && [ "$GAME" != platinum ]; then
-    [ -n "$ROM" ] || fail "give your ROM: tools/switch/build_game.sh $GAME your-rom.nds"
-    [ -f "$ROM" ] || fail "no such file: $ROM"
-    ROM="$(cd "$(dirname "$ROM")" && pwd)/$(basename "$ROM")"
+    if [ "$GAME" = all ] && [ -z "$ROM" ]; then
+        ROM=""
+    else
+        [ -n "$ROM" ] || fail "give your ROM: tools/switch/build_game.sh $GAME your-rom.nds"
+        [ -f "$ROM" ] || fail "no such file: $ROM"
+        ROM="$(cd "$(dirname "$ROM")" && pwd)/$(basename "$ROM")"
+    fi
 fi
 for tool in git cmake ninja python3; do
     command -v "$tool" >/dev/null || fail "$tool is not installed (Ubuntu: sudo apt install git cmake ninja-build python3)"
@@ -133,6 +137,8 @@ bw_tables() { # romfs-folder
     python3 tools/bw2/funcmap.py build-decomp-pokew2/config/w2_us/arm9 - "$1/funcs/IRDO.txt"
     python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv - "$1/funcs/IRBO.txt"
     python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv - "$1/funcs/IRAO.txt" --white
+    python3 tools/shift_table.py --all "$1/funcs"
+    cp tools/regions/*.txt "$1/funcs/"
 }
 
 case "$GAME" in
@@ -141,21 +147,31 @@ all)
     # the SoulSilver ROM as for hgss) and the Black games' function tables in its romfs (as for bw).
     # It shows the list of the player's games when it starts (frontend/launcher.h).
     BUILD=build-switch-all
-    [ "$(dd if="$ROM" bs=1 skip=12 count=4 2>/dev/null)" = IPGE ] ||
-        fail "$ROM is not Pokemon SoulSilver (US, game code IPGE): the tables are made from it"
-    if [ ! -f gen/sources.cmake ]; then
-        say "SoulSilver's tables, from $ROM"
-        python3 tools/recomp.py --rom "$ROM" --layout layouts/soulsilver-us.json melonDS/src gen
-        python3 tools/apps.py --layout layouts/soulsilver-us.json gen
+    if [ -n "$ROM" ]; then
+        [ "$(dd if="$ROM" bs=1 skip=12 count=4 2>/dev/null)" = IPGE ] ||
+            fail "$ROM is not Pokemon SoulSilver (US, game code IPGE): the tables are made from it"
+        if [ ! -f gen/sources.cmake ]; then
+            say "SoulSilver's tables, from $ROM"
+            python3 tools/recomp.py --rom "$ROM" --layout layouts/soulsilver-us.json melonDS/src gen
+            python3 tools/apps.py --layout layouts/soulsilver-us.json gen
+        fi
+        python3 tools/soulsilver/tables_only.py gen build-gen-tables
+        GEN="$HERE/build-gen-tables"
+    elif [ -d "$HERE/build-gen-tables" ] && [ -f "$HERE/build-gen-tables/sources.cmake" ]; then
+        GEN="$HERE/build-gen-tables"
+    else
+        say "No SoulSilver ROM provided: building the all-games program with Gen 5, Platinum and GBA support"
+        GEN="$HERE/tools/bw2/stubgen"
     fi
-    python3 tools/soulsilver/tables_only.py gen build-gen-tables
     ROMFS="$HERE/$BUILD/romfs"
     bw_tables "$ROMFS"
     cp tools/platinum/CPUE.txt "$ROMFS/funcs/CPUE.txt"
     cp tools/platinum/ADAE.txt "$ROMFS/funcs/ADAE.txt" # Diamond: Platinum's names (tools/port_family.py)
     python3 tools/shift_table.py --all "$ROMFS/funcs" # (the other languages: tools/versions)
     cp tools/regions/*.txt "$ROMFS/funcs/"
-    python3 tools/regions/package_profiles.py --funcs "$ROMFS/funcs" --portable "$HERE/build-gen-tables/rc_portable.cpp"
+    if [ -f "$GEN/rc_portable.cpp" ]; then
+        python3 tools/regions/package_profiles.py --funcs "$ROMFS/funcs" --portable "$GEN/rc_portable.cpp"
+    fi
     # The HOME Menu entries' program (HOME MENU ICONS in the list's settings: frontend/switch_forwarder.cpp).
     say "The HOME Menu icons' loader (tools/switch/forwarder)"
     build bash tools/switch/build_forwarder.sh "$HERE/$BUILD/forwarder-build" "$ROMFS/forwarder"
@@ -171,9 +187,9 @@ all)
         ART="$HERE/$BUILD/box-art"
         say "Pictures for the game list: $SSR_PC_ART"
     fi
-    icon="${SSR_SWITCH_ICON_ALL:-${SSR_SWITCH_ICON:-}}"
+    icon="${SSR_SWITCH_ICON_ALL:-${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}}"
     rm -f "$BUILD/icon.jpg"
-    [ -n "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
+    [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
     # GBA games too (SSR_GBA_DIR: Pokemon GBA Widescreen's folder, after its setup.sh): with
     # devkitPro installed or unpacked (DEVKITPRO), not its Docker image, which sees only this folder.
     if [ -n "${SSR_GBA_DIR:-}" ]; then
@@ -184,31 +200,31 @@ all)
         say "GBA games too: $SSR_GBA_DIR"
     fi
     say "Compiling for the Switch"
-    build SSR_SWITCH_JIT=1 SSR_SWITCH_GEN="$HERE/build-gen-tables" SSR_SWITCH_BUILD="$BUILD" \
-        SSR_SWITCH_ROMFS="$ROMFS" SSR_ALL_GAMES=ON SSR_PC_ART="$ART" SSR_NRO_TITLE="Pokémon Fulldex" bash tools/switch/build.sh
-    mkdir -p build-sd/switch/pokemon-ds-wide/roms
-    cp "$BUILD/ssrecomp.nro" build-sd/switch/pokemon-ds-wide/pokemon-ds-wide.nro
+    build SSR_SWITCH_JIT=1 SSR_SWITCH_GEN="$GEN" SSR_SWITCH_BUILD="$BUILD" \
+        SSR_SWITCH_ROMFS="$ROMFS" SSR_ALL_GAMES=ON SSR_PC_ART="$ART" SSR_NRO_TITLE="NoSplitNX" bash tools/switch/build.sh
+    mkdir -p build-sd/switch/nosplitnx/roms
+    cp "$BUILD/ssrecomp.nro" build-sd/switch/nosplitnx/nosplitnx.nro
     # The licences: this program's (GPL-3) and, with the GBA games built in, mGBA's (MPL-2.0).
-    cp LICENSE build-sd/switch/pokemon-ds-wide/LICENSE.txt
-    cp LICENSE-Noto.txt build-sd/switch/pokemon-ds-wide/LICENSE-Noto.txt
-    LICENCES="switch/pokemon-ds-wide/LICENSE.txt switch/pokemon-ds-wide/LICENSE-Noto.txt"
+    cp LICENSE build-sd/switch/nosplitnx/LICENSE.txt
+    cp LICENSE-Noto.txt build-sd/switch/nosplitnx/LICENSE-Noto.txt
+    LICENCES="switch/nosplitnx/LICENSE.txt switch/nosplitnx/LICENSE-Noto.txt"
     GBA_WORK="${GBAW_WORK:-$HOME/pokemon-gba-wide}"
     if [ -n "${SSR_GBA_DIR:-}" ]; then
         [ -f "$GBA_WORK/mgba/LICENSE" ] || fail "no mGBA in $GBA_WORK (Pokemon GBA Widescreen's setup.sh makes it; GBAW_WORK if elsewhere)"
-        cp "$GBA_WORK/mgba/LICENSE" build-sd/switch/pokemon-ds-wide/LICENSE-mGBA.txt
-        LICENCES="$LICENCES switch/pokemon-ds-wide/LICENSE-mGBA.txt"
+        cp "$GBA_WORK/mgba/LICENSE" build-sd/switch/nosplitnx/LICENSE-mGBA.txt
+        LICENCES="$LICENCES switch/nosplitnx/LICENSE-mGBA.txt"
     else
-        rm -f build-sd/switch/pokemon-ds-wide/LICENSE-mGBA.txt
+        rm -f build-sd/switch/nosplitnx/LICENSE-mGBA.txt
     fi
-    ZIP=pokemon-ds-wide-all-switch.zip
+    ZIP=nosplitnx-switch.zip
     rm -f "build-sd/$ZIP"
     # The program, its licences and an empty roms folder, so that it is plain where the ROMs go.
     (cd build-sd && python3 -c "
 import sys, zipfile
 with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
-    z.write('switch/pokemon-ds-wide/pokemon-ds-wide.nro')
+    z.write('switch/nosplitnx/nosplitnx.nro')
     for f in sys.argv[2:]: z.write(f)
-    d = zipfile.ZipInfo('switch/pokemon-ds-wide/roms/')
+    d = zipfile.ZipInfo('switch/nosplitnx/roms/')
     d.external_attr = (0o40755 << 16) | 0x10  # a folder, for Unix and Windows unzippers
     z.writestr(d, '')
 " "$ZIP" $LICENCES)
@@ -216,19 +232,19 @@ with zipfile.ZipFile(sys.argv[1], 'w', zipfile.ZIP_DEFLATED) as z:
     python3 -c "
 import sys, zipfile
 names = zipfile.ZipFile(sys.argv[1]).namelist()
-want = ['switch/pokemon-ds-wide/pokemon-ds-wide.nro'] + sys.argv[2:] + ['switch/pokemon-ds-wide/roms/']
+want = ['switch/nosplitnx/nosplitnx.nro'] + sys.argv[2:] + ['switch/nosplitnx/roms/']
 if names != want: sys.exit('unexpected files in the zip: %s' % names)
 print('zip holds:', ', '.join(names))
 " "build-sd/$ZIP" $LICENCES
     python3 tools/updater/write_checksums.py build-sd --build "$ZIP=$BUILD/fulldex-build-id.txt"
     say "Done: $HERE/build-sd/$ZIP"
-    ls -l build-sd/switch/pokemon-ds-wide "build-sd/$ZIP"
+    ls -l build-sd/switch/nosplitnx "build-sd/$ZIP"
     cat <<EOF
 
-Copy build-sd/switch to the root of the SD card, then your ROMs into /switch/pokemon-ds-wide/roms/ (any
+Copy build-sd/switch to the root of the SD card, then your ROMs into /switch/nosplitnx/roms/ (any
 names; English Black, White, Black 2, White 2; SoulSilver and HeartGold US$([ -n "${SSR_GBA_DIR:-}" ] && printf '; the GBA games, Emerald,\nFireRed, LeafGreen and Ultra Violet, there or in a GBA folder in it')). Its list also shows
 the games in the other folders of /switch (the one-game downloads), each with the save in its folder.
-On the Switch, hold R while starting any game and choose Pokémon Fulldex.
+On the Switch, hold R while starting any game and choose NoSplitNX.
 The zip holds only the program, ready to share: nothing of the games.
 EOF
     exit 0
@@ -243,7 +259,8 @@ soulsilver)
     # Without the recompiled code: the game runs on melonDS's JIT, about 1.7 times as fast on the
     # Switch, and the build takes minutes instead of most of an hour.
     python3 tools/soulsilver/tables_only.py gen build-gen-tables
-    [ -n "${SSR_SWITCH_ICON:-}" ] && install -D -m 644 "$SSR_SWITCH_ICON" "$BUILD/icon.jpg"
+    icon="${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}"
+    [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
     say "Compiling for the Switch"
     build SSR_SWITCH_JIT=1 SSR_SWITCH_GEN="$HERE/build-gen-tables" SSR_SWITCH_BUILD="$BUILD" bash tools/switch/build.sh
     ;;
@@ -261,7 +278,8 @@ black2|white2)
         "/config/$CFG/arm9/symbols.txt" "/config/$CFG/arm9/*/symbols.txt" "/config/$CFG/arm9/overlays/*/symbols.txt"
     mkdir -p "$BUILD"
     python3 tools/bw2/funcmap.py "$DECOMP_DIR/config/$CFG/arm9" "$ROM" "$BUILD/funcs.txt"
-    [ -n "${SSR_SWITCH_ICON:-}" ] && install -D -m 644 "$SSR_SWITCH_ICON" "$BUILD/icon.jpg"
+    icon="${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}"
+    [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
     say "Compiling for the Switch"
     build SSR_SWITCH_BUILD="$BUILD" SSR_NRO_TITLE="Pokemon $NAME" SSR_SWITCH_ROMFS= bash tools/bw2/build_switch.sh
     ;;
@@ -278,9 +296,9 @@ bw)
     # SSR_SWITCH_ICON_WHITE (256x256 JPEG), else SSR_SWITCH_ICON for all, else libnx's.
     for g in black2:"Black 2" white2:"White 2" black:"Black" white:"White"; do
         var="SSR_SWITCH_ICON_$(echo "${g%%:*}" | tr a-z A-Z)"
-        icon="${!var:-${SSR_SWITCH_ICON:-}}"
+        icon="${!var:-${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}}"
         rm -f "$BUILD/icon.jpg"
-        [ -n "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
+        [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
         build SSR_SWITCH_BUILD="$BUILD" SSR_NRO_TITLE="Pokemon ${g#*:}" SSR_SWITCH_ROMFS="$ROMFS" bash tools/bw2/build_switch.sh
         mkdir -p "build-sd/switch/pokemon-${g%%:*}-wide"
         cp "$BUILD/ssrecomp.nro" "build-sd/switch/pokemon-${g%%:*}-wide/pokemon-${g%%:*}-wide.nro"
@@ -333,8 +351,8 @@ platinum)
     python3 tools/shift_table.py --all "$ROMFS/funcs" # (the other languages: tools/versions)
     cp tools/regions/CPUF.txt "$ROMFS/funcs/"
     rm -f "$BUILD/icon.jpg"
-    icon="${SSR_SWITCH_ICON_PLATINUM:-${SSR_SWITCH_ICON:-}}"
-    [ -n "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
+    icon="${SSR_SWITCH_ICON_PLATINUM:-${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}}"
+    [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
     say "Compiling for the Switch"
     build SSR_SWITCH_BUILD="$BUILD" SSR_NRO_TITLE="Pokemon Platinum" SSR_SWITCH_ROMFS="$ROMFS" bash tools/bw2/build_switch.sh
     mkdir -p build-sd/switch/pokemon-platinum-wide
@@ -380,9 +398,9 @@ hgss)
     # Packed once per game, with its own title and icon in the Homebrew Menu (the same program).
     for g in soulsilver:SoulSilver heartgold:HeartGold; do
         var="SSR_SWITCH_ICON_$(echo "${g%%:*}" | tr a-z A-Z)"
-        icon="${!var:-${SSR_SWITCH_ICON:-}}"
+        icon="${!var:-${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}}"
         rm -f "$BUILD/icon.jpg"
-        [ -n "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
+        [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
         build SSR_SWITCH_JIT=1 SSR_SWITCH_GEN="$HERE/build-gen-tables" SSR_SWITCH_BUILD="$BUILD" \
             SSR_NRO_TITLE="Pokemon ${g#*:}" bash tools/switch/build.sh
         mkdir -p "build-sd/switch/pokemon-${g%%:*}-wide"
@@ -420,7 +438,8 @@ black)
     fetch_symbols build-decomp-aletheia "$BW1_DECOMP" "$BW1_COMMIT" '/layout/function_addrs.tsv'
     mkdir -p "$BUILD"
     python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv "$ROM" "$BUILD/funcs.txt"
-    [ -n "${SSR_SWITCH_ICON:-}" ] && install -D -m 644 "$SSR_SWITCH_ICON" "$BUILD/icon.jpg"
+    icon="${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}"
+    [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
     say "Compiling for the Switch"
     build bash tools/bw1/build_switch.sh
     ;;
@@ -431,7 +450,8 @@ white)
     fetch_symbols build-decomp-aletheia "$BW1_DECOMP" "$BW1_COMMIT" '/layout/function_addrs.tsv'
     mkdir -p "$BUILD"
     python3 tools/bw1/funcmap.py build-decomp-aletheia/layout/function_addrs.tsv "$ROM" "$BUILD/funcs.txt" --white
-    [ -n "${SSR_SWITCH_ICON:-}" ] && install -D -m 644 "$SSR_SWITCH_ICON" "$BUILD/icon.jpg"
+    icon="${SSR_SWITCH_ICON:-$HERE/tools/switch/icon.jpg}"
+    [ -f "$icon" ] && install -D -m 644 "$icon" "$BUILD/icon.jpg"
     say "Compiling for the Switch"
     build SSR_NRO_TITLE="Pokemon White" bash tools/bw1/build_switch.sh
     ;;
