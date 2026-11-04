@@ -265,7 +265,7 @@ void SetRomFolder(Folders& fo)
 // the emulator, which reads them by file name.
 void ExtractFuncs(const Folders& fo)
 {
-    std::vector<const char*> codes = { "IREO", "IRDO", "IRBO", "IRAO", "CPUE", "ADAE", "IRAS", "CPUS", "ADAS", "APAE", "APAF", "APAS", "APAD", "ADAD", "ADAI", "IREF", "IRDF", "CPUF", "IRBF", "IRAF" };
+    std::vector<const char*> codes = { "IREO", "IRDO", "IRBO", "IRAO", "CPUE", "ADAE", "IRAS", "CPUS", "ADAS", "APAE", "APAF", "APAS", "APAD", "ADAD", "ADAI", "IREF", "IRDF", "CPUF", "IRBF", "IRAF", "IRBS", "IRES", "IRDS" };
     for (const auto& p : RegionalProfiles::profiles) if (p.functions) codes.push_back(p.code);
     for (const char* code : codes)
     {
@@ -294,8 +294,13 @@ bool Playable(const Folders& fo, const Launcher::Game& g)
 {
     if (g.platform == Launcher::GBA) return true; // (any GBA game plays, with widescreen or without)
     if (!g.known) return false;
-    if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE")) return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
-    return Exists(fo.funcs + "/" + g.code + ".txt");
+    const char* hackBase = Launcher::HackBaseCode(g.code);
+    if (IsGame(g.code, "IPGE") || IsGame(g.code, "IPKE") || (hackBase && (!strcmp(hackBase, "IPGE") || !strcmp(hackBase, "IPKE"))))
+        return rc_num_chunks > 0 && rc_portable_knows(g.code.c_str());
+    if (Exists(fo.funcs + "/" + g.code + ".txt")) return true;
+    if (Exists(fo.funcs + "/" + BaseGameCode(g.code) + ".txt")) return true;
+    if (hackBase && Exists(fo.funcs + "/" + std::string(hackBase) + ".txt")) return true;
+    return false;
 }
 
 std::string PrepareLaunch(const Launcher::Game& game)
@@ -1985,8 +1990,16 @@ bool Start(int& argc, char**& argv)
     // given a function table (one switches to the Black games' layouts); the others take theirs.
     if (!IsGame(game.code, "IPGE") && !IsGame(game.code, "IPKE"))
     {
-        g_args.push_back("--funcs");
-        g_args.push_back(fo.funcs + "/" + game.code + ".txt");
+        const std::string own = fo.funcs + "/" + game.code + ".txt";
+        const std::string base = fo.funcs + "/" + BaseGameCode(game.code) + ".txt";
+        const char* hackBase = Launcher::HackBaseCode(game.code);
+        const std::string hack = hackBase ? fo.funcs + "/" + std::string(hackBase) + ".txt" : "";
+        const std::string chosenFuncs = Exists(own) ? own : (Exists(base) ? base : hack);
+        if (!chosenFuncs.empty() && Exists(chosenFuncs))
+        {
+            g_args.push_back("--funcs");
+            g_args.push_back(chosenFuncs);
+        }
     }
     for (auto& a : g_args) g_argv.push_back(a.data());
     g_argv.push_back(nullptr);

@@ -3464,7 +3464,7 @@ int main(int argc, char** argv)
             // row 117), which runs off the bottom of the screen and is never drawn further: it
             // is cut below its text and closed with the saved game's card's bottom edge.
             const int extra = 16;
-            const bool regionalMenu = RegionalProfiles::Find(gameCode.c_str()) != nullptr;
+            const bool regionalMenu = (BaseGameCode(gameCode) != gameCode) || (RegionalProfiles::Find(gameCode.c_str()) != nullptr);
             // Keep complete rows for the new profiles: German labels exceed the English crop.
             Element list = Crop(0, regionalMenu ? 0 : 32, 15, regionalMenu ? 256 : 194, 193);
             Element cards = Crop(1, regionalMenu ? 0 : 22, 14, regionalMenu ? 256 : 214, 166);

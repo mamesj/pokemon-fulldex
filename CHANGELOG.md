@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- Graduate Spanish Pokémon Black, White, Black 2 and White 2 to fully supported games with their own function tables, widescreen map expansion and uncropped title menus.
+
 - Diamond and Pearl in more languages (experimental, like English Diamond/Pearl): Diamond in German
   and Italian, Pearl in French, Spanish, German and Korean. Each has its own save (pearl-fr.sav,
   diamond-de.sav, ...). Japanese Diamond and Pearl are not supported yet.
