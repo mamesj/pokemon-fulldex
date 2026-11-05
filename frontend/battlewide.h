@@ -8,6 +8,7 @@
 // boxes, which belong to the edges of the screen, are moved out to the edges of the view.
 // Everything else is the screen exactly as the game drew it.
 #pragma once
+#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -88,6 +89,7 @@ public:
     {
         using namespace melonDS;
         Capture& C = Cap;
+        GrabFrame.store(nds.NumFrames, std::memory_order_relaxed);
         if (extend <= 0 || !top.flags) return false;
         const GPU2D::Unit& unit = unitNum == 0 ? nds.GPU.GPU2D_A : nds.GPU.GPU2D_B;
         const u32 dispcnt = unit.DispCnt;
@@ -596,7 +598,13 @@ public:
         // the two Pokémon the background (bands of sky and ground) is stretched to fill the
         // gap. As a battle opens it glides there once its platform has slid into place (not
         // before: the grass sweeping past would be torn).
-        Calls++;
+        // Counted in emulated frames, not in calls: how often this runs depends on which
+        // frames are drawn (the display's rate, skipped frames, screenshots).
+        const unsigned now = GrabFrame.load(std::memory_order_relaxed);
+        const int steps = !Counted ? 1 : now < LastFrame ? 0 : (int)std::min<unsigned>(now - LastFrame, 60);
+        Counted = true;
+        LastFrame = now;
+        Calls += steps;
         // Not while something large in 3D is in front across its rows (the grass of the
         // opening, fading out): the Pokémon is part of it, and could not move with the
         // background.
@@ -636,10 +644,10 @@ public:
         if (platRight > platLeft)
         {
             if ((platLeft + platRight) / 2 < 192) Glide = 0;
-            else if (!busy) Glide = std::min(1.0f, Glide + 1 / 20.0f);
+            else if (!busy) Glide = std::min(1.0f, Glide + steps / 20.0f);
         }
         else if ((Glide > 0 || Calls > 300) && !busy)                   // after the opening, or joined late
-            Glide = std::min(1.0f, Glide + 1 / 20.0f);
+            Glide = std::min(1.0f, Glide + steps / 20.0f);
         const int enemyShift = (int)std::lround(extend * Glide);
 
         const int w = 256 + 2 * extend;
@@ -925,6 +933,7 @@ public:
     {
         Glide = 0;
         Calls = 0;
+        Counted = false;
         Ghosts[0] = Ghosts[1] = Ghost();
     }
 
@@ -977,5 +986,8 @@ private:
     };
     Ghost Ghosts[2];
     int Calls = 0;
+    unsigned LastFrame = 0;
+    std::atomic<unsigned> GrabFrame { 0 };
+    bool Counted = false;
     std::vector<int> Stack;
 };
