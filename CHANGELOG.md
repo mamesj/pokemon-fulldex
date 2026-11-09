@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **DS fast forward: sound keeps up with the picture.** Music and effects speed up together instead of playing from a growing backlog.
+
 - **RetroAchievements: a wrong clock is named when logging in fails.** A device whose date is
   wrong (a Switch set years ahead, often) cannot check the server's certificate, and the settings
   only said LOGIN FAILED. They now say CHECK THE CLOCK, and the message asks whether the date and

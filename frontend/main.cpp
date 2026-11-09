@@ -79,6 +79,7 @@
 #include "android_second_screen.h"
 #include "merged.h"
 #include "audiostretch.h"
+#include "audio_fast_forward.h"
 #include "gpucompose.h"
 #include "emuthread.h"
 #include "pc_launcher.h"
@@ -6981,12 +6982,6 @@ int main(int argc, char** argv)
     std::vector<int16_t> audioOut;
     uint64_t audioTick = 0;
     double audioSlow = 1.0;
-    // Sound generated while fast forwarding, not yet played. Playback stays at the DS's
-    // own rate (below); this holds the rest. ffAudioAt is the index of the next unplayed
-    // sample (stereo, so two entries per frame).
-    std::vector<int16_t> ffAudio;
-    int ffAudioAt = 0;
-    double ffAudioFrac = 0;
     bool ffInBattle = false;
     bool audioWasFastForward = false;
     bool running = true;
@@ -7198,7 +7193,7 @@ int main(int argc, char** argv)
     uint64_t perfDsFrames = 0; // DS frames emulated since the last timing line (several a frame when fast forwarding)
 
     // The emulation of one frame (several when fast-forwarding). Every frame's sound is kept
-    // and played back at normal speed; see the fast-forward queue below.
+    // and compressed to match the picture during fast forward (below).
     // Fast forward runs several frames at once and shows the last: the others' 2D and widescreen
     // world are not drawn (rc_frame_hidden, rc_wide_render_skip), so it goes faster and shows
     // more frames. SSR_FF_FULL=1 draws them all, for comparing.
@@ -10433,18 +10428,9 @@ int main(int argc, char** argv)
             }
         }
 
-        // Fast forward runs several DS frames in one go, and each one produces a frame of
-        // sound. Playing all of it in that one moment would rush the music; keeping a single
-        // slice and throwing the rest away makes the song skip ahead. Keep every sample and
-        // hand the device one frame's worth per wall-clock frame, so the music stays at its
-        // normal speed while the picture runs ahead. The queue holds up to half a minute
-        // of sound so a long fast forward cannot store the whole song. Past that, further
-        // sound is left out; once what is queued has played, playback takes up from where
-        // the game is now. Letting go drops that long backlog. Keep the short device queue
-        // (normally about 100 ms) playing so the next samples have time to arrive; clearing
-        // it here creates a hole in playback. A battle has its own music: when one
-        // starts or ends, the queue is dropped so that track starts with the battle
-        // instead of waiting behind whatever was playing before it.
+        // Every emulated frame contributes sound. Compress the batch to the time of one
+        // displayed frame so effects stay with the picture, at a higher pitch during fast
+        // forward. Keeping the original-rate music accumulated up to 30 seconds of lag.
         const bool audioFastForward = speed > 1;
         if (audioFastForward != audioWasFastForward)
         {
@@ -10454,51 +10440,10 @@ int main(int argc, char** argv)
             audioSlow = 1.0;
             audioTick = 0;
             audioWasFastForward = audioFastForward;
-        }
-        const bool inBattle = std::strncmp(scene.name, "battle", 6) == 0;
-        if (speed > 1 && inBattle != ffInBattle && (ffAudioAt != 0 || !ffAudio.empty()))
-        {
-            ffAudio.clear();
-            ffAudioAt = 0;
-            ffAudioFrac = 0;
             if (audio) SDL_ClearQueuedAudio(audio);
         }
-        ffInBattle = inBattle;
-        if (speed > 1)
-        {
-            const int cap = 48000 * 30;
-            int have = ((int)ffAudio.size() - ffAudioAt) / 2;
-            if (have <= 0)
-            {
-                ffAudio.clear();
-                ffAudioAt = 0;
-                have = 0;
-            }
-            if (got > 0 && (have == 0 || have + got <= cap))
-                ffAudio.insert(ffAudio.end(), audioBuf.begin(), audioBuf.begin() + (size_t)got * 2);
-            ffAudioFrac += 48000.0 * frameTime;
-            int take = (int)ffAudioFrac;
-            ffAudioFrac -= take;
-            have = ((int)ffAudio.size() - ffAudioAt) / 2;
-            if (take > have) take = have;
-            if (take > 0)
-            {
-                std::copy(ffAudio.begin() + ffAudioAt, ffAudio.begin() + ffAudioAt + (size_t)take * 2, audioBuf.begin());
-                ffAudioAt += take * 2;
-                if (ffAudioAt >= 8192)
-                {
-                    ffAudio.erase(ffAudio.begin(), ffAudio.begin() + ffAudioAt);
-                    ffAudioAt = 0;
-                }
-            }
-            got = take;
-        }
-        else if (ffAudioAt != 0 || !ffAudio.empty())
-        {
-            ffAudio.clear();
-            ffAudioAt = 0;
-            ffAudioFrac = 0;
-        }
+        ffInBattle = std::strncmp(scene.name, "battle", 6) == 0;
+        got = AudioFastForward(audioBuf.data(), got, speed);
 
         if (audio && got > 0)
         {
