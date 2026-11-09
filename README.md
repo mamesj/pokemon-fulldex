@@ -688,6 +688,21 @@ Nintendo, Creatures, GAME FREAK and The Pokémon Company and is shown only to te
 apart; it is not part of this repository's code. If you hold the rights and want it removed,
 open an issue and it will be taken out.
 
+Official FullDex project
+FullDex is an independent, open-source project maintained by @mamesj.
+- Official repository: https://github.com/mamesj/pokemon-fulldex
+- Official website: https://fulldex.co.uk
+- Official releases: https://github.com/mamesj/pokemon-fulldex/releases
+FullDex builds on existing open-source projects, including ClickingMaster/ssrecomp, melonDS, and components adapted from PokeDaisy. Their authors are acknowledged in the Credits and licence section.
+
+The FullDex-specific development, modifications and integration work are documented through this repository's Git history and contributions.
+
+FullDex is distributed under the GNU GPL, subject to applicable third-party licences. Users are permitted to modify and redistribute GPL-covered software in accordance with its licence.
+
+Unofficial builds: Community modifications are welcome but are not automatically endorsed, verified or supported by the FullDex maintainers. Please clearly identify modified versions, preserve required copyright and licence notices, and link back to the original project as a courtesy.
+
+FullDex is not affiliated with Nintendo, Game Freak or The Pokémon Company.
+
 ---
 
 Built with the help of [Claude](https://claude.ai), Anthropic's AI.
