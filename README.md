@@ -478,7 +478,7 @@ letter chooser with a controller or touch.
 
 ## The games
 
-### Pokémon Black 2 and White 2
+### Black 2 and White 2
 
 | | |
 |---|---|
@@ -500,7 +500,7 @@ letter chooser with a controller or touch.
   bag and the save screen laid out for one screen; and more of the map loaded
   around you, so the wide view never runs out of land.
 
-### Pokémon SoulSilver and HeartGold
+### SoulSilver and HeartGold
 
 ![SoulSilver: a wild Meowth appears and Lugia is sent out, in widescreen](docs/screenshots/soulsilver-lugia-battle.gif)
 
@@ -523,7 +523,7 @@ letter chooser with a controller or touch.
   out for one screen. Where this project started: the original ssrecomp was
   SoulSilver on the PC.
 
-### Pokémon Black and White
+### Black and White
 
 | | |
 |---|---|
@@ -544,7 +544,7 @@ letter chooser with a controller or touch.
   start menu, the X menu, the save screen, the Badge Case and the Pokédex; and
   the C-Gear's question at the start answered for you.
 
-### Pokémon Platinum
+### Platinum
 
 | | |
 |---|---|
@@ -558,7 +558,7 @@ letter chooser with a controller or touch.
   menu at the right edge of the view, and the Bag, party, Pokédex, map and
   other menus laid out for one screen.
 
-### Pokémon Diamond and Pearl
+### Diamond and Pearl
 
 | | |
 |---|---|
@@ -589,7 +589,7 @@ letter chooser with a controller or touch.
 | ![FireRed: Charizard's Flamethrower at Mewtwo in Cerulean Cave](docs/screenshots/gba-firered-mewtwo-battle.png) | ![FireRed: Charizard against the Snorlax on Route 16](docs/screenshots/gba-firered-snorlax-battle.png) |
 | ![LeafGreen: Venusaur's Razor Leaf at Articuno in the Seafoam Islands](docs/screenshots/gba-leafgreen-articuno-battle.png) | ![LeafGreen: Lavender Town, with Pokémon Tower at the top](docs/screenshots/gba-leafgreen-lavender.png) |
 
-Pokémon Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet (a FireRed hack) in widescreen at 60 fps,
+Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet (a FireRed hack) in widescreen at 60 fps,
 from [Pokémon GBA Widescreen](#credits-and-licence), built in on Windows, Linux, Mac, Android,
 iPhone, iPad and the Switch.
 
