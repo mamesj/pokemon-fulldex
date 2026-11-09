@@ -153,7 +153,7 @@ cat > "$APP/Info.plist" <<PLIST
 <plist version="1.0"><dict>
 <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
 <key>CFBundleName</key><string>Pokemon Fulldex</string>
-<key>CFBundleDisplayName</key><string>Pokémon Fulldex</string>
+<key>CFBundleDisplayName</key><string>Pokemon Fulldex</string>
 <key>CFBundleIdentifier</key><string>io.github.mamesj.pokemonds</string>
 <key>CFBundleExecutable</key><string>pokemon-ds-wide</string>
 <key>CFBundlePackageType</key><string>APPL</string>

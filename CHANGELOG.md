@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **iOS: SideStore can register the app name.** Both app names now use Pokemon Fulldex without an accented letter.
+
 - **RetroAchievements: a wrong clock is named when logging in fails.** A device whose date is
   wrong (a Switch set years ahead, often) cannot check the server's certificate, and the settings
   only said LOGIN FAILED. They now say CHECK THE CLOCK, and the message asks whether the date and
