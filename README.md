@@ -1,4 +1,4 @@
-# Pokémon Fulldex
+# Fulldex
 
 **All your favourite Pokémon games on a PC (Windows and Linux), a Mac, a Steam
 Deck or other handheld PC, an Android phone, an iPhone or iPad, or a modded Nintendo Switch: one screen,
@@ -9,7 +9,7 @@ widescreen, 60 fps, up to 4K on a PC and 720p on the Switch.** No more squinting
 **3DS:** Omega Ruby, Alpha Sapphire, X, Y, Ultra Sun and Ultra Moon, coming soon.<br>
 Which languages: [Supported games](#supported-games).
 
-![Pokémon Fulldex: Black 2, White 2, Black, White, SoulSilver, HeartGold, Platinum, Diamond and Pearl, and the GBA games Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet, in widescreen at 60 fps on a PC, a Mac, a Steam Deck, an Android phone and a Nintendo Switch; RetroAchievements, cheats, save states and your own colour and background built in](docs/screenshots/trailer-3.gif)
+![Fulldex: Black 2, White 2, Black, White, SoulSilver, HeartGold, Platinum, Diamond and Pearl, and the GBA games Emerald, Ruby, Sapphire, FireRed, LeafGreen and Ultra Violet, in widescreen at 60 fps on a PC, a Mac, a Steam Deck, an Android phone and a Nintendo Switch; RetroAchievements, cheats, save states and your own colour and background built in](docs/screenshots/trailer-3.gif)
 
 ## Downloads
 
