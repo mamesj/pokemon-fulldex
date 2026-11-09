@@ -79,6 +79,7 @@
 #include "android_second_screen.h"
 #include "merged.h"
 #include "audiostretch.h"
+#include "menu_drag.h"
 #include "gpucompose.h"
 #include "emuthread.h"
 #include "pc_launcher.h"
@@ -6813,7 +6814,7 @@ int main(int argc, char** argv)
             if (hubFor(select) >= 0) page = hubFor(select);
         }
         if (page >= PAGE_HUB_SAVE && page <= PAGE_HUB_QUIT) hubPage = page;
-        if (page != menuPage) menu.scrollPx = 0; // (a new page opens at its top, its chosen row then kept in view)
+        if (page != menuPage) { menu.scrollPx = 0; menu.freeScroll = false; } // (a new page opens at its top, its chosen row then kept in view)
         menuPage = page;
         buildMenu();
         menu.selected = 0;
@@ -7012,6 +7013,10 @@ int main(int argc, char** argv)
         float x0 = 0, y0 = 0;
     } dexSwipe;
     int dexSwipeKey = 0, dexSwipeFrames = 0;
+    MenuDrag menuDrag;
+    SDL_FingerID menuDragFinger = 0;
+    int menuDragPage = -1;
+
 #ifdef __SWITCH__
     // The Switch's touch screen: its SDL sends finger events and no mouse events made from them,
     // so a finger is followed here (the first one down) and taken as the mouse below.
@@ -7914,6 +7919,32 @@ int main(int argc, char** argv)
                     if (raTyped.size() > 128) raTyped.resize(128);
                     buildMenu();
                 }
+                else if ((menu.open || menuDrag.active) &&
+                         (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP))
+                {
+                    int ow = 0, oh = 0;
+                    SDL_GetRendererOutputSize(renderer, &ow, &oh);
+                    const int x = (int)(ev.tfinger.x * ow), y = (int)(ev.tfinger.y * oh);
+                    if (menuDrag.active)
+                    {
+                        if (ev.tfinger.fingerId != menuDragFinger) continue;
+                        if (!menu.open || menuPage != menuDragPage) { menuDrag.active = false; continue; }
+                        if (menuDrag.Move(y, std::max(12, oh / 60), menu.scrollPx)) menu.freeScroll = true;
+                        if (ev.type == SDL_FINGERUP && menuDrag.End()) menuTap(x, y);
+                    }
+                    else if (ev.type == SDL_FINGERDOWN)
+                    {
+                        const int item = menu.ItemAt(x, y);
+                        if (menu.style == 1 && !menu.keyGrid && !menu.slotGrid && item >= 0 &&
+                            menu.items[item].kind != Menu::K_BACK && x >= menu.rowX && x < menu.rowX + menu.rowW)
+                        {
+                            menuDrag.Begin(y, menu.scrollPx);
+                            menuDragFinger = ev.tfinger.fingerId;
+                            menuDragPage = menuPage;
+                        }
+                        else menuTap(x, y);
+                    }
+                }
 #ifdef __SWITCH__
                 else if (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP)
                 {
@@ -8434,6 +8465,7 @@ int main(int argc, char** argv)
             nav.accept |= pressed(cfg.byLabel ? PAD_A : PAD_B);
             nav.back |= pressed(cfg.byLabel ? PAD_B : PAD_A);
         }
+        if (menu.open && (nav.up || nav.down || nav.left || nav.right)) menu.freeScroll = false;
         heldNav = heldNow;
 
         // A choice card tapped in a settings page's preview (Menu::pickWanted): left or right pressed

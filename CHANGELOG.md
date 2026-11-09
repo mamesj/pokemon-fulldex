@@ -3,6 +3,8 @@
 
 ## Unreleased
 
+- **Pause menu on touch screens: swipe settings rows to scroll.** Swiping no longer changes the setting under your finger; tapping still selects it.
+
 - **RetroAchievements: a wrong clock is named when logging in fails.** A device whose date is
   wrong (a Switch set years ahead, often) cannot check the server's certificate, and the settings
   only said LOGIN FAILED. They now say CHECK THE CLOCK, and the message asks whether the date and
