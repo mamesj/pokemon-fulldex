@@ -102,7 +102,8 @@ Local validation includes a full Linux DS/GBA build with Pokémon Hub enabled,
 using the supplied US SoulSilver ROM and SDL2. Screenshots exercise the actual
 launcher with a synthetic demonstration save, including list/grid switching,
 seen silhouettes, selected-region totals, and portrait layout. This does not
-validate Android device input/rendering or the external 3DS runtime.
+validate the external 3DS runtime. Android input/rendering was subsequently checked
+on an Odin 3; see [Android device validation](NATIONAL_DEX_ANDROID_VALIDATION.md).
 
 ## Android build handoff
 

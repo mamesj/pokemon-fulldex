@@ -256,7 +256,7 @@ XML
 "$BT/aapt2" compile --dir "$W/res" -o "$W/res.zip"
 "$BT/aapt2" link -o "$W/base.apk" -I "$JAR" --manifest "$MANIFEST" ${RENAME[@]+"${RENAME[@]}"} \
     --min-sdk-version 24 --target-sdk-version 34 "$W/res.zip"
-javac -nowarn --release 11 -cp "$JAR" -d "$W/classes" \
+javac -encoding UTF-8 -nowarn --release 11 -cp "$JAR" -d "$W/classes" \
     "$W/BuildInfo.java" $(find "$DEPS/$SDL_NAME/android-project/app/src/main/java" tools/android/allgames/java -name '*.java') ${KIT_JAVA[@]+"${KIT_JAVA[@]}"} 2>&1
 [ -f "$W/classes/io/github/mamesj/pokemonds/GameActivity.class" ] || fail "the app's Java code did not compile"
 [ -z "$KIT" ] || [ -f "$W/classes/io/github/mamesj/omeganx/FullDex3ds.class" ] || fail "the 3DS kit's Java code did not compile"

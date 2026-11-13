@@ -51,6 +51,7 @@
 #include "cloud_autosync.h"
 #include "library_history.h"
 #include "android_second_screen.h"
+#include "android_save_folder.h"
 #include "ui_lang_sdl.h"
 #include "controls.h"
 #include "rom_library.h"
@@ -895,9 +896,8 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
 #ifdef __ANDROID__
     auto chooseRomFolder = [&]() {
         // Pin an established save location before an import can fill storage or change the ROM root.
-        std::error_code error;
         if (Launcher::ConfigValue(fo.cfg, "saves_folder").empty() && !fo.saves.empty() &&
-            (!fo.roms.empty() || std::filesystem::is_directory(std::filesystem::u8path(fo.saves), error))) {
+            AndroidSaveFolder::Established(fo.roms, fo.saves)) {
             SetConfigValues(fo.cfg, {{"saves_folder", fo.saves}});
             if (Launcher::ConfigValue(fo.cfg, "saves_folder") != fo.saves) {
                 note = "COULD NOT KEEP THE SAVE FOLDER"; return;
@@ -1497,6 +1497,9 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
         if (Launcher::Glassy(canvas))
         {
             Launcher::GlassFocus& F = Launcher::Focus();
+            // A page or sidebar selection takes precedence over the Home tab bar.
+            // Touch navigation can leave its previous keyboard focus behind.
+            if (F.page >= 0 || F.side >= 0) { onTabs = onSettings = false; F.onSort = false; }
             if (onTabs && F.onSort && F.tool == 1 && !Launcher::TabHidden().empty()) { Launcher::OpenPlusMenu(); return; } // (+: new, or one hidden shown)
             if (onTabs && F.onSort && F.tool != 3)
             {
@@ -2737,6 +2740,8 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                     const int side = Launcher::SideAt(canvas, mx, my);
                     if (side >= 0)
                     {
+                        onTabs = onSettings = false;
+                        Launcher::Focus().onSort = false;
                         Launcher::Focus().side = -1;
                         if (side == Launcher::SIDE_SETTINGS) toggleGuide();
                         else if (!Launcher::OpenSide(side)) note = std::string(Launcher::SideName(side)) + ": COMING SOON";
