@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 // The Pokémon hub: moving Pokémon between the player's own games, by the rules the real games
 // kept (Pal Park, Poké Transfer, Poké Transporter and Pokémon Bank, and trades within a
 // generation). Saves are read and written with PKSM-Core (FlagBrew, GPL-3.0, much of it from

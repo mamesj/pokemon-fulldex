@@ -2,12 +2,13 @@ from pathlib import Path
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
 ROOT = Path(__file__).resolve().parents[1]
 class LinuxShortcutTests(unittest.TestCase):
-    @unittest.skipUnless(shutil.which('c++') and shutil.which('gio'), 'Linux C++ and GIO required')
+    @unittest.skipUnless(sys.platform.startswith('linux') and shutil.which('c++') and shutil.which('gio'), 'Linux C++ and GIO required')
     def test_shortcuts_launch_exact_rom(self):
         with tempfile.TemporaryDirectory(prefix="FullDex's shortcuts ") as folder:
             home=Path(folder); (home/'Desktop').mkdir()
