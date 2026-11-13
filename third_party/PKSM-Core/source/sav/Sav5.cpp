@@ -395,6 +395,23 @@ namespace pksm
         data[formDex + formLen * (2 + shiny) + (bit >> 3)] |= (1 << (bit & 7));
     }
 
+    // Fulldex extension: bounded reads using this save's selected Pokédex block.
+    bool Sav5::speciesDex(Species species, bool& seen, bool& caught) const
+    {
+        seen = caught = false;
+        const unsigned id = u16(species);
+        if (id == 0 || id > 649 || PokeDex < 0) return false;
+        const size_t byte = (id - 1) / 8;
+        const u8 mask = u8(1u << ((id - 1) % 8));
+        const size_t caughtAt = size_t(PokeDex) + 8 + byte;
+        const size_t seenAt = size_t(PokeDex) + 92 + byte;
+        if (caughtAt >= length || seenAt + 252 >= length) return false;
+        caught = (data[caughtAt] & mask) != 0;
+        for (size_t bank = 0; bank < 4; ++bank)
+            seen = seen || (data[seenAt + bank * 84] & mask) != 0;
+        return true;
+    }
+
     int Sav5::dexSeen(void) const
     {
         int ret = 0;

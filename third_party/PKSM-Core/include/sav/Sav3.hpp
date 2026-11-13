@@ -100,6 +100,9 @@ namespace pksm
         Sav3(const std::shared_ptr<u8[]>& data, SmallVector<int, 3>&& seenFlagOffsets);
 
     public:
+        // Fulldex read-only National Dex accessor.
+        [[nodiscard]] bool speciesDex(Species species, bool& seen, bool& caught) const override;
+
         static constexpr int SIZE_BLOCK = 0x1000;
         [[nodiscard]] static Game getVersion(const std::shared_ptr<u8[]>& dt);
         // Whether the buffer holds a Gen III save at all. Every one of the fourteen

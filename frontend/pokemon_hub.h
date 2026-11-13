@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 // The Pokémon hub: moving Pokémon between the player's own games, by the rules the real games
 // kept (Pal Park, Poké Transfer, Poké Transporter and Pokémon Bank, and trades within a
 // generation). Saves are read and written with PKSM-Core (FlagBrew, GPL-3.0, much of it from
@@ -17,11 +18,29 @@
 //
 // Nothing here draws anything: the launcher's screens (to come) ask, show, and confirm.
 #include <memory>
+#include <array>
 #include <string>
 #include <vector>
 
 namespace PokemonHub
 {
+
+// A detached, read-only view of the in-game Pokédex. Index zero is unused.
+struct DexSnapshot
+{
+    int generation = 0;
+    std::string game, trainer;
+    std::array<bool, 722> seen{}, caught{};
+};
+bool ReadDex(const std::string& path, DexSnapshot& out, std::string& error, bool romHack = false);
+std::string DexSpeciesName(int species);
+int DexGbaSpeciesIndex(int species);
+struct DexSpeciesData
+{
+    std::string type1, type2;
+    std::array<int, 6> stats{}; // HP, Attack, Defense, Sp. Atk, Sp. Def, Speed (Gen 6).
+};
+DexSpeciesData DexSpeciesDetails(int species);
 
 struct Mon
 {

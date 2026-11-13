@@ -42,6 +42,9 @@ namespace pksm
         [[nodiscard]] int dexFormIndex(int species, int formct) const;
 
     public:
+        // Fulldex read-only National Dex accessor.
+        [[nodiscard]] bool speciesDex(Species species, bool& seen, bool& caught) const override;
+
         Sav6(const std::shared_ptr<u8[]>& data, u32 length) : Sav(data, length) {}
 
         virtual void resign(void) = 0;

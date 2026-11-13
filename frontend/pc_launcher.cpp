@@ -51,6 +51,7 @@
 #include "cloud_autosync.h"
 #include "library_history.h"
 #include "android_second_screen.h"
+#include "android_save_folder.h"
 #include "ui_lang_sdl.h"
 #include "controls.h"
 #include "rom_library.h"
@@ -895,9 +896,8 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
 #ifdef __ANDROID__
     auto chooseRomFolder = [&]() {
         // Pin an established save location before an import can fill storage or change the ROM root.
-        std::error_code error;
         if (Launcher::ConfigValue(fo.cfg, "saves_folder").empty() && !fo.saves.empty() &&
-            (!fo.roms.empty() || std::filesystem::is_directory(std::filesystem::u8path(fo.saves), error))) {
+            AndroidSaveFolder::Established(fo.roms, fo.saves)) {
             SetConfigValues(fo.cfg, {{"saves_folder", fo.saves}});
             if (Launcher::ConfigValue(fo.cfg, "saves_folder") != fo.saves) {
                 note = "COULD NOT KEEP THE SAVE FOLDER"; return;
@@ -1497,6 +1497,9 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
         if (Launcher::Glassy(canvas))
         {
             Launcher::GlassFocus& F = Launcher::Focus();
+            // A page or sidebar selection takes precedence over the Home tab bar.
+            // Touch navigation can leave its previous keyboard focus behind.
+            if (F.page >= 0 || F.side >= 0) { onTabs = onSettings = false; F.onSort = false; }
             if (onTabs && F.onSort && F.tool == 1 && !Launcher::TabHidden().empty()) { Launcher::OpenPlusMenu(); return; } // (+: new, or one hidden shown)
             if (onTabs && F.onSort && F.tool != 3)
             {
@@ -2683,13 +2686,13 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                         }
                     }
                 }
-                // A page's detail panel upright (a phone): a finger dragged up or down scrolls what is in it.
-                if (Launcher::Glassy(canvas) && !guide && canvas.h > canvas.w && Launcher::Focus().page >= 0 && Launcher::Focus().pdY > 0 && Launcher::Focus().dMax > 0
+                // Scroll portrait detail panels, and the Dex's independent detail screen in either orientation.
+                if (Launcher::Glassy(canvas) && !guide && Launcher::Focus().page >= 0 && ((canvas.h > canvas.w && Launcher::Focus().pdY > 0) || (Launcher::Focus().page == Launcher::SIDE_HUB && Launcher::HubMode() == 4)) && Launcher::Focus().dMax > 0
                     && !(Launcher::Focus().page == Launcher::SIDE_LAUNCHER && Launcher::LauncherMode() == 1 && Launcher::Look().edit >= 0))
                 {
                     static bool dOn = false, dDrag = false; static int dY0 = 0, dS0 = 0;
                     Launcher::GlassFocus& DF = Launcher::Focus();
-                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { dOn = my >= DF.pdY; dY0 = my; dS0 = DF.dScroll; dDrag = false; }
+                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { dOn = DF.page == Launcher::SIDE_HUB && Launcher::HubMode() == 4 ? Launcher::DexDetailAt(mx, my) : my >= DF.pdY; dY0 = my; dS0 = DF.dScroll; dDrag = false; }
                     else if (e.type == SDL_MOUSEMOTION && dOn)
                     {
                         if (!dDrag && std::abs(my - dY0) > 8 * s) { dDrag = true; dragging = true; }
@@ -2702,7 +2705,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                 {
                     static bool lsOn = false; static int lsY = 0, lsS = 0;
                     Launcher::GlassFocus& LF = Launcher::Focus();
-                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { const bool ab = LF.page == Launcher::SIDE_ABOUT; lsOn = ab ? (mx >= LF.abX && mx < LF.abX + LF.abW && my >= LF.pY) : (mx >= LF.pX && mx < LF.pX + LF.pW && my >= LF.pY); lsY = my; lsS = LF.rScroll; dragging = false; }
+                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { const bool ab = LF.page == Launcher::SIDE_ABOUT; lsOn = ab ? (mx >= LF.abX && mx < LF.abX + LF.abW && my >= LF.pY) : (mx >= LF.pX && mx < LF.pX + LF.pW && my >= LF.pY); if (LF.page == Launcher::SIDE_HUB && Launcher::HubMode() == 4) lsOn = lsOn && my < LF.pY + LF.rVis * LF.pRow; lsY = my; lsS = LF.rScroll; dragging = false; }
                     else if (e.type == SDL_MOUSEMOTION && lsOn)
                     {
                         if (!dragging && std::abs(my - lsY) > 8 * s) dragging = true;
@@ -2737,6 +2740,8 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                     const int side = Launcher::SideAt(canvas, mx, my);
                     if (side >= 0)
                     {
+                        onTabs = onSettings = false;
+                        Launcher::Focus().onSort = false;
                         Launcher::Focus().side = -1;
                         if (side == Launcher::SIDE_SETTINGS) toggleGuide();
                         else if (!Launcher::OpenSide(side)) note = std::string(Launcher::SideName(side)) + ": COMING SOON";
@@ -2748,7 +2753,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                         Launcher::GlassFocus& RF = Launcher::Focus();
                         const int a = Launcher::RomActionAt(mx, my), r = Launcher::RomRowAt(mx, my);
                         if (a >= 0) { RF.side = -1; RF.pact = a; choose(); }
-                        else if (r >= 0) { const bool again = RF.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3) && RF.prow == r && RF.side < 0; RF.side = -1; RF.pact = -1; RF.prow = r; if (again) choose(); }
+                        else if (r >= 0) { const bool again = RF.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3 || Launcher::HubMode() == 4) && RF.prow == r && RF.side < 0; RF.side = -1; RF.pact = -1; RF.prow = r; RF.freeScroll = false; if (again || (RF.page == Launcher::SIDE_HUB && Launcher::HubMode() == 4 && Launcher::DexInstant(r))) choose(); }
                         break;
                     }
                     if (Launcher::Focus().page == Launcher::SIDE_LAUNCHER)

@@ -620,7 +620,7 @@ int PickGame(const std::vector<Launcher::Game>& gamesIn, int selected, const std
                     {
                         const int a = Launcher::RomActionAt(tapX, tapY), r = Launcher::RomRowAt(tapX, tapY);
                         if (a >= 0) { F.side = -1; F.pact = a; aDown = true; }
-                        else if (r >= 0) { if (F.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3) && F.prow == r && F.side < 0) aDown = true; F.side = -1; F.pact = -1; F.prow = r; }
+                        else if (r >= 0) { if (F.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3 || Launcher::HubMode() == 4) && ((F.prow == r && F.side < 0) || (Launcher::HubMode() == 4 && Launcher::DexInstant(r)))) aDown = true; F.side = -1; F.pact = -1; F.prow = r; F.freeScroll = false; }
                     }
                     else if (F.page == Launcher::SIDE_LAUNCHER && Launcher::LookTap(tapX, tapY)) {} // (the colour wheel)
                     else if (F.page >= 0 && Launcher::NotesAt(tapX, tapY)) { if (F.prow == 2 && F.side < 0) aDown = true; F.side = -1; F.prow = 2; }
