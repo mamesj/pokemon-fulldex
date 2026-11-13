@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full, side-by-side National Dex build; never substitutes synthetic game code.
+# Side-by-side National Dex build; never substitutes synthetic game code.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$HERE"
@@ -8,7 +8,12 @@ if [ $# -ne 1 ]; then
     exit 2
 fi
 : "${SSR_GBA_DIR:?Set SSR_GBA_DIR to the GBA build dependency}"
-: "${SSR_3DS_ANDROID_KIT:?Set SSR_3DS_ANDROID_KIT to the compatible 3DS Android embed kit}"
+if [ -n "${SSR_3DS_ANDROID_KIT:-}" ]; then
+    echo 'Building with DS, GBA and the supplied 3DS embed kit.'
+else
+    echo 'Building with DS and GBA. Set SSR_3DS_ANDROID_KIT to include 3DS.'
+fi
+export CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-3}"
 export SSR_POKEMON_HUB=ON
 export SSR_ANDROID_ABIS=arm64-v8a
 export SSR_ANDROID_PACKAGE=io.github.coolman4128.fulldex.nationaldex

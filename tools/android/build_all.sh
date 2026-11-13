@@ -135,7 +135,7 @@ for abi in $ABIS; do
     say "SDL2 for Android ($abi)"
     cmake -S "$DEPS/$SDL_NAME" -B "$DEPS/build-sdl2-$abi" "${ARGS[@]}" -DCMAKE_INSTALL_PREFIX="$SDL_PREFIX" \
             -DSDL_STATIC=OFF -DSDL_TEST=OFF >/dev/null
-    ninja -C "$DEPS/build-sdl2-$abi" install >/dev/null
+    cmake --build "$DEPS/build-sdl2-$abi" --target install >/dev/null
     say "Compiling for Android ($abi)"
     # The JIT for every game, no libpng (screenshots are for tests), WORLD ON GPU through
     # OpenGL ES 3.2 (SSR_GPU3D: melonDS/src/GPU3D_WideGpu_GL.cpp; a phone that cannot do it
@@ -144,7 +144,7 @@ for abi in $ABIS; do
     cmake -S . -B "build-android-all-$abi" "${ARGS[@]}" -DSDL2_DIR="$SDL_PREFIX/lib/cmake/SDL2" \
         -DSSR_JIT=ON -DSSR_PC_ALL_GAMES=ON -DSSR_PNG=OFF -DSSR_GPU3D=ON -DSSR_PORTABLE_X86=ON \
         -DSSR_GENERATED_DIR="$HERE/build-gen-tables" -DSSR_PC_ART="$ART" -DSSR_GBA_DIR="${SSR_GBA_DIR:-}" ${ONLINE[@]+"${ONLINE[@]}"} >/dev/null
-    ninja -C "build-android-all-$abi" ssrecomp
+    cmake --build "build-android-all-$abi" --target ssrecomp
     mkdir -p "build-android-dist/lib/$abi"
     "$STRIP" -o "build-android-dist/lib/$abi/libmain.so" "build-android-all-$abi/libmain.so"
     "$STRIP" -o "build-android-dist/lib/$abi/libSDL2.so" "$SDL_PREFIX/lib/libSDL2.so"

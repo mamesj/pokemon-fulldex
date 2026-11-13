@@ -82,14 +82,12 @@ game-file compatibility or Android packaging.
 
 ## Android build handoff
 
-The full build requires:
+The DS/GBA build requires:
 
 1. The user's US SoulSilver ROM (game code `IPGE`) for upstream's generated tables.
 2. A prepared Pokémon GBA Widescreen source/dependency folder (`SSR_GBA_DIR`), and
    its mGBA checkout under `GBAW_WORK`, as required by upstream's build.
-3. The compatible ORAS Android embed kit (`SSR_3DS_ANDROID_KIT`), including its
-   native libraries, Java source, title metadata and manifest snippet.
-4. JDK 17; Android SDK platform 34 and build-tools 34.0.0; NDK 27.2.12479018;
+3. JDK 17; Android SDK platform 34 and build-tools 34.0.0; NDK 27.2.12479018;
    CMake, Ninja, Python 3 with Pillow, curl, git and zip.
 
 Once those inputs are available:
@@ -98,16 +96,23 @@ Once those inputs are available:
 export ANDROID_SDK="$HOME/android-sdk"
 export SSR_GBA_DIR="/path/to/prepared/pokemon-gba-wide"
 export GBAW_WORK="/path/to/pokemon-gba-wide-work"
-export SSR_3DS_ANDROID_KIT="/path/to/3ds/builds/android/embed"
 tools/android/build_national_dex.sh "/path/to/soulsilver-us.nds"
 ```
 
+To also include 3DS, set `SSR_3DS_ANDROID_KIT` to the compatible ORAS project's
+`builds/android/embed` folder before running the same command. It must contain
+the native libraries, Java source, title metadata and manifest snippet. The kit
+is optional; without it, the app includes DS/GBA gameplay and National Dex still
+lists all 721 species. The maintainer can use their existing kit, but the real
+3DS save location and artwork still require verification as described above.
+
 The wrapper enables `SSR_POKEMON_HUB`, builds arm64-v8a, gives the app the separate
 ID `io.github.coolman4128.fulldex.nationaldex` and label **Fulldex National Dex**,
-and uses a dedicated signing key. The Android updater refuses upstream APK
+and uses a dedicated signing key. Builds default to three compiler jobs; override
+`CMAKE_BUILD_PARALLEL_LEVEL` to change that. The Android updater refuses upstream APK
 replacement in this build. Keep the signing key for subsequent installs.
 
 Outputs are `build-android-dist/fulldex-national-dex-arm64.apk`, its `.sha256`, and
 source revision/diff records. Native libraries are checked for 16 KB alignment.
-The wrapper requires the full dependencies; it does not replace them with dummy
-game code. No Android APK has been produced without those inputs.
+The wrapper requires the real SoulSilver ROM and GBA dependencies; it does not
+replace them with dummy game code.
