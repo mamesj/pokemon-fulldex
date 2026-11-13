@@ -5,6 +5,7 @@
 #include "sav/Sav.hpp"
 #include "utils/i18n.hpp"
 #include "utils/ValueConverter.hpp"
+#include "personal/personal.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -265,6 +266,17 @@ std::string DexSpeciesName(int species)
 int DexGbaSpeciesIndex(int species)
 {
     return species >= 1 && species <= 386 ? pksm::SpeciesConverter::nationalToG3(pksm::Species{(u16)species}) : 0;
+}
+
+DexSpeciesData DexSpeciesDetails(int species)
+{
+    if (species < 1 || species > 721) return {};
+    using namespace pksm::PersonalXYORAS;
+    DexSpeciesData out;
+    out.type1 = i18n::type(pksm::Language::ENG, type1(species));
+    if (type2(species) != type1(species)) out.type2 = i18n::type(pksm::Language::ENG, type2(species));
+    out.stats = {baseHP(species), baseAtk(species), baseDef(species), baseSpa(species), baseSpd(species), baseSpe(species)};
+    return out;
 }
 
 bool ReadDex(const std::string& path, DexSnapshot& out, std::string& error, bool romHack)

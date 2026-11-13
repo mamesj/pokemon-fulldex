@@ -91,5 +91,10 @@ int main()
     auto blank=std::shared_ptr<u8[]>(new u8[0x80000]{});Write(root/"blank",blank,0x80000);
     assert(!PokemonHub::ReadDex((root/"blank").string(),dex,error));
     assert(PokemonHub::DexSpeciesName(1)=="BULBASAUR" && !PokemonHub::DexSpeciesName(721).empty());
+    auto pika=PokemonHub::DexSpeciesDetails(25);
+    assert(pika.type1=="Electric" && pika.type2.empty() && pika.stats[0]==35 && pika.stats[5]==90);
+    auto bulba=PokemonHub::DexSpeciesDetails(1);
+    assert(bulba.type1=="Grass" && bulba.type2=="Poison");
+    assert(PokemonHub::DexSpeciesDetails(0).type1.empty() && PokemonHub::DexSpeciesDetails(722).type1.empty());
     std::filesystem::remove_all(root); std::cout<<"National Dex save reader checks passed\n";
 }

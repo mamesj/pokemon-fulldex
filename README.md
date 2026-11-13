@@ -364,7 +364,9 @@ It is a beta: back up your saves, and please [report](#reporting-a-bug) anything
 ### National Dex (this fork)
 
 **Hub → National Dex** tracks seen/caught progress across selected GBA, DS and 3DS
-saves for Kanto through Kalos. See [setup, supported formats and build instructions](docs/NATIONAL_DEX.md).
+saves for Kanto through Kalos. Switch between list and sprite-grid views, see
+caught / total for your selected regions, and inspect entry text and contributing
+games. See [setup, supported formats and build instructions](docs/NATIONAL_DEX.md).
 Build with `SSR_POKEMON_HUB=ON`, or use `tools/android/build_national_dex.sh`.
 
 ### Settings

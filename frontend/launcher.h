@@ -4831,6 +4831,7 @@ inline int PageRowAt(int x, int y)
 inline int RomRowAt(int x, int y)
 {
     const GlassFocus& f = Focus();
+    if (f.page == SIDE_HUB && HubMode() == 4 && !Mover().open) return DexRowAt(x, y);
     if ((f.page != SIDE_ROMS && f.page != SIDE_HUB) || f.pW <= 0 || f.pRow <= 0 || x < f.pX || x >= f.pX + f.pW || y < f.pY) return -1;
     const int k = (y - f.pY) / f.pRow;
     const int i = f.rScroll + k;
@@ -4839,6 +4840,7 @@ inline int RomRowAt(int x, int y)
 inline int RomActionAt(int x, int y)
 {
     const GlassFocus& f = Focus();
+    if (f.page == SIDE_HUB && HubMode() == 4 && !Mover().open) return DexDetailAt(x, y) ? 0 : -1;
     if (f.page == SIDE_HUB && HubMode() == 3 && !Mover().open) return SavesSlotAt(x, y); // (Manage Saves' slots)
     if ((f.page != SIDE_ROMS && f.page != SIDE_HUB) || f.aW <= 0 || f.aRow <= 0 || x < f.aX || x >= f.aX + f.aW || y < f.aY) return -1;
     const int i = (y - f.aY) / f.aRow;

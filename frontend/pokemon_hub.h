@@ -34,6 +34,12 @@ struct DexSnapshot
 bool ReadDex(const std::string& path, DexSnapshot& out, std::string& error, bool romHack = false);
 std::string DexSpeciesName(int species);
 int DexGbaSpeciesIndex(int species);
+struct DexSpeciesData
+{
+    std::string type1, type2;
+    std::array<int, 6> stats{}; // HP, Attack, Defense, Sp. Atk, Sp. Def, Speed (Gen 6).
+};
+DexSpeciesData DexSpeciesDetails(int species);
 
 struct Mon
 {

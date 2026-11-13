@@ -4,22 +4,37 @@ The launcher's **Hub → National Dex** combines saved Pokédex flags from the g
 you select. It does not modify saves or count the Pokémon currently in boxes.
 Traded-away Pokémon remain caught if the game's Pokédex records them as caught.
 
-On first opening, choose **Select Saves**, check the games that should count, and
+On first opening, check the saves that should count in **Save sources**, and
 choose **Done**. Newly discovered saves stay unchecked. **Regions** selects debut
 generations: Kanto #001–151, Johto #152–251, Hoenn #252–386, Sinnoh #387–493,
 Unova #494–649, Kalos #650–721. All six start enabled, including mythical Pokémon.
 Forms, genders and shinies count as one species.
 
-The list has All, Unseen, Seen but Uncaught, and Caught filters. Unseen entries show
-only their number and `???`; seen entries show their name and a silhouette; caught
-entries show their name and full-color menu sprite. The detail pane identifies the
-contributing saves. A missing artwork source does not change progress or reveal an
-unseen Pokémon. On a controller, use Right to enter an overflowing detail pane,
-Up/Down to scroll, and Left/Back to return to the species list.
+The header always shows **caught / total**, completion percentage, and seen count.
+Both counts use only the selected regions; filters change the visible entries but
+never the completion denominator. For example, selecting Kanto and Johto gives a
+total of 251 species.
 
-Selections are stored in `national-dex.cfg` beside launcher settings. Opening the
-page, changing selections, or choosing **Refresh** reads the selected saves again
-on a background worker. Older requests cannot overwrite newer selections.
+The **List / Grid** tabs switch browsing layouts while keeping the highlighted
+species. Both have All, Unseen, Seen only, and Caught filters. Unseen entries show
+a question mark; seen entries show their name and a black silhouette; caught
+entries show their name and full-color menu sprite. The detail screen enlarges
+the pixel sprite and shows types, Pokédex text, contributing games under **Caught
+in** or **Seen in**, and base stats. No identity or artwork is revealed for unseen
+entries. Long details scroll inside their panel.
+
+Tap either view tab or a toolbar control to activate it; tap a species to inspect
+it. On a controller, arrows navigate the grid or list. Up from the first row
+reaches the view tabs; Left/Right there reaches the other toolbar controls, and
+Down returns to the selected species. Confirm on an entry opens its overflowing
+details; Right from the last grid column or the list also focuses details.
+Up/Down scrolls details, and Left/Back returns to browsing. Dragging scrolls either
+panel independently, including in landscape.
+
+Selections are stored in `national-dex.cfg` beside launcher settings; the view is
+remembered in `national-dex.cfg.view`. Opening the page, changing selections, or
+choosing **Refresh** reads the selected saves again on a background worker. Older
+requests cannot overwrite newer selections.
 Missing or invalid selected saves stay listed, and totals are marked **Partial**.
 
 ## Supported data
@@ -46,9 +61,17 @@ ROM's `GFRomHeader` graphics interface (as documented by pret's Emerald and Fire
 projects). A GBA revision without that interface requires a DS/ORAS artwork source.
 
 Decoders use bounded reads and synthetic format tests. Encrypted 3DS dumps and
-unsupported image encodings produce an artwork-unavailable message. Real game
-artwork and the 3DS runtime layout remain unverified until the user's inputs are
-available. Decoded sprites are cached in memory and cleared on refresh.
+unsupported image encodings show a placeholder without affecting progress.
+The visible sprite bounds are scaled with nearest-neighbor pixels. Decoded sprites
+are cached in memory and cleared on refresh. SoulSilver artwork and entry text
+have been checked in the Linux app with a user-supplied ROM and a synthetic save;
+other real-game artwork sources and the 3DS runtime layout still need validation.
+
+Entry text is decoded locally from supported Platinum, HeartGold/SoulSilver,
+Black/White and Black 2/White 2 message archives. Gen 5 is preferred for its larger
+catalogue; Gen 4 fills gaps. Types and stats come from that same game's personal
+data, with Gen 6 species data as a fallback. Entries outside available ROM text
+show an explicit unavailable message. No text or artwork is downloaded or bundled.
 
 Format references:
 
@@ -70,15 +93,16 @@ ctest --test-dir build-national-dex/checks --output-on-failure
 
 The suite exercises all supported save families, the second Gen 4 save slot,
 checksum failures, bounded reads, unchanged input bytes, aggregation, filters,
-persistence, stale-request rejection, synthetic artwork, and launcher navigation
+persistence, stale-request rejection, synthetic artwork, grid/list navigation,
+view switching, touch targets, and detail scrolling in portrait and landscape
 with Pokémon Hub enabled and disabled. The standalone tests share the application's
 PKSM-Core target through `cmake/PokemonHub.cmake`.
 
-Local validation also compiled the full native launcher with Pokémon Hub enabled
-using upstream's synthetic ROM fixture and a local SDL build. Existing About and
-ROM action navigation regressions passed (the optional external-binary About
-case was skipped). This verifies compilation and synthetic behavior, not real
-game-file compatibility or Android packaging.
+Local validation includes a full Linux DS/GBA build with Pokémon Hub enabled,
+using the supplied US SoulSilver ROM and SDL2. Screenshots exercise the actual
+launcher with a synthetic demonstration save, including list/grid switching,
+seen silhouettes, selected-region totals, and portrait layout. This does not
+validate Android device input/rendering or the external 3DS runtime.
 
 ## Android build handoff
 

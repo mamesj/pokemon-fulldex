@@ -2683,13 +2683,13 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                         }
                     }
                 }
-                // A page's detail panel upright (a phone): a finger dragged up or down scrolls what is in it.
-                if (Launcher::Glassy(canvas) && !guide && canvas.h > canvas.w && Launcher::Focus().page >= 0 && Launcher::Focus().pdY > 0 && Launcher::Focus().dMax > 0
+                // Scroll portrait detail panels, and the Dex's independent detail screen in either orientation.
+                if (Launcher::Glassy(canvas) && !guide && Launcher::Focus().page >= 0 && ((canvas.h > canvas.w && Launcher::Focus().pdY > 0) || (Launcher::Focus().page == Launcher::SIDE_HUB && Launcher::HubMode() == 4)) && Launcher::Focus().dMax > 0
                     && !(Launcher::Focus().page == Launcher::SIDE_LAUNCHER && Launcher::LauncherMode() == 1 && Launcher::Look().edit >= 0))
                 {
                     static bool dOn = false, dDrag = false; static int dY0 = 0, dS0 = 0;
                     Launcher::GlassFocus& DF = Launcher::Focus();
-                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { dOn = my >= DF.pdY; dY0 = my; dS0 = DF.dScroll; dDrag = false; }
+                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { dOn = DF.page == Launcher::SIDE_HUB && Launcher::HubMode() == 4 ? Launcher::DexDetailAt(mx, my) : my >= DF.pdY; dY0 = my; dS0 = DF.dScroll; dDrag = false; }
                     else if (e.type == SDL_MOUSEMOTION && dOn)
                     {
                         if (!dDrag && std::abs(my - dY0) > 8 * s) { dDrag = true; dragging = true; }
@@ -2702,7 +2702,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                 {
                     static bool lsOn = false; static int lsY = 0, lsS = 0;
                     Launcher::GlassFocus& LF = Launcher::Focus();
-                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { const bool ab = LF.page == Launcher::SIDE_ABOUT; lsOn = ab ? (mx >= LF.abX && mx < LF.abX + LF.abW && my >= LF.pY) : (mx >= LF.pX && mx < LF.pX + LF.pW && my >= LF.pY); lsY = my; lsS = LF.rScroll; dragging = false; }
+                    if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) { const bool ab = LF.page == Launcher::SIDE_ABOUT; lsOn = ab ? (mx >= LF.abX && mx < LF.abX + LF.abW && my >= LF.pY) : (mx >= LF.pX && mx < LF.pX + LF.pW && my >= LF.pY); if (LF.page == Launcher::SIDE_HUB && Launcher::HubMode() == 4) lsOn = lsOn && my < LF.pY + LF.rVis * LF.pRow; lsY = my; lsS = LF.rScroll; dragging = false; }
                     else if (e.type == SDL_MOUSEMOTION && lsOn)
                     {
                         if (!dragging && std::abs(my - lsY) > 8 * s) dragging = true;
@@ -2748,7 +2748,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                         Launcher::GlassFocus& RF = Launcher::Focus();
                         const int a = Launcher::RomActionAt(mx, my), r = Launcher::RomRowAt(mx, my);
                         if (a >= 0) { RF.side = -1; RF.pact = a; choose(); }
-                        else if (r >= 0) { const bool again = RF.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3 || Launcher::HubMode() == 4) && RF.prow == r && RF.side < 0; RF.side = -1; RF.pact = -1; RF.prow = r; if (again) choose(); }
+                        else if (r >= 0) { const bool again = RF.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3 || Launcher::HubMode() == 4) && RF.prow == r && RF.side < 0; RF.side = -1; RF.pact = -1; RF.prow = r; RF.freeScroll = false; if (again || (RF.page == Launcher::SIDE_HUB && Launcher::HubMode() == 4 && Launcher::DexInstant(r))) choose(); }
                         break;
                     }
                     if (Launcher::Focus().page == Launcher::SIDE_LAUNCHER)
