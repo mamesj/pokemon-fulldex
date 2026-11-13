@@ -681,6 +681,23 @@ namespace pksm
         }
     }
 
+    // Fulldex extension: bounded reads using this save's selected Pokédex block.
+    bool Sav3::speciesDex(Species species, bool& seen, bool& caught) const
+    {
+        seen = caught = false;
+        const unsigned id = u16(species);
+        if (id == 0 || id > 386 || PokeDex < 0) return false;
+        const size_t byte = (id - 1) / 8;
+        const u8 mask = u8(1u << ((id - 1) % 8));
+        const size_t caughtAt = size_t(PokeDex) + 16 + byte;
+        const size_t seenAt = size_t(PokeDex) + 68 + byte;
+        if (caughtAt >= length || seenAt + 0 >= length) return false;
+        caught = (data[caughtAt] & mask) != 0;
+        for (size_t bank = 0; bank < 1; ++bank)
+            seen = seen || (data[seenAt + bank * 0] & mask) != 0;
+        return true;
+    }
+
     int Sav3::dexSeen(void) const
     {
         return std::count_if(availableSpecies().begin(), availableSpecies().end(),

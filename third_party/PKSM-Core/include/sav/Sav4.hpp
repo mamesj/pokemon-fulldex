@@ -74,6 +74,9 @@ namespace pksm
         void checksumRegions(int (&general)[3], int (&storage)[3]) const;
 
     public:
+        // Fulldex read-only National Dex accessor.
+        [[nodiscard]] bool speciesDex(Species species, bool& seen, bool& caught) const override;
+
         Sav4(const std::shared_ptr<u8[]>& data, u32 length) : Sav(data, length) {}
 
         void resign(void);

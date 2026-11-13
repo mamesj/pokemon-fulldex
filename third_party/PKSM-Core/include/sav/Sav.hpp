@@ -208,6 +208,11 @@ namespace pksm
             const Date& date = Date::today()) const = 0; // Look into bank boolean parameter
         [[nodiscard]] virtual std::unique_ptr<PKX> emptyPkm() const = 0;
 
+        // Fulldex extension: read-only species flags (bit 0 seen, bit 1 caught).
+        // Unsupported save generations return false; callers must not interpret that as empty.
+        [[nodiscard]] virtual bool speciesDex(Species, bool& seen, bool& caught) const
+        { seen = caught = false; return false; }
+
         virtual void dex(const PKX& pk)                                       = 0;
         [[nodiscard]] virtual int dexSeen(void) const                         = 0;
         [[nodiscard]] virtual int dexCaught(void) const                       = 0;

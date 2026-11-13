@@ -2748,7 +2748,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                         Launcher::GlassFocus& RF = Launcher::Focus();
                         const int a = Launcher::RomActionAt(mx, my), r = Launcher::RomRowAt(mx, my);
                         if (a >= 0) { RF.side = -1; RF.pact = a; choose(); }
-                        else if (r >= 0) { const bool again = RF.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3) && RF.prow == r && RF.side < 0; RF.side = -1; RF.pact = -1; RF.prow = r; if (again) choose(); }
+                        else if (r >= 0) { const bool again = RF.page == Launcher::SIDE_HUB && (Launcher::HubTop() || Launcher::HubMode() == 3 || Launcher::HubMode() == 4) && RF.prow == r && RF.side < 0; RF.side = -1; RF.pact = -1; RF.prow = r; if (again) choose(); }
                         break;
                     }
                     if (Launcher::Focus().page == Launcher::SIDE_LAUNCHER)

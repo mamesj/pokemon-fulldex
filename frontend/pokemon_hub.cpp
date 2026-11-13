@@ -4,11 +4,13 @@
 #include "pkx/PKX.hpp"
 #include "sav/Sav.hpp"
 #include "utils/i18n.hpp"
+#include "utils/ValueConverter.hpp"
 
 #include <algorithm>
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 
 namespace PokemonHub
 {
@@ -254,6 +256,55 @@ Mon MonOf(const pksm::PKX& pk, int box, int slot)
 
 Save::Save() : d(new Impl) {}
 Save::~Save() {}
+
+std::string DexSpeciesName(int species)
+{
+    return species >= 1 && species <= 721 ? SpeciesName(species) : std::string();
+}
+
+int DexGbaSpeciesIndex(int species)
+{
+    return species >= 1 && species <= 386 ? pksm::SpeciesConverter::nationalToG3(pksm::Species{(u16)species}) : 0;
+}
+
+bool ReadDex(const std::string& path, DexSnapshot& out, std::string& error, bool romHack)
+{
+    out = {}; error.clear();
+    if (romHack) { error = "ROM hack Pokédex layouts are not supported"; return false; }
+    std::error_code ec;
+    const auto size = fs::file_size(P(path), ec);
+    if (ec) { error = "Save is missing or cannot be read"; return false; }
+    if (size < 0x20000 || size > 0x80100) { error = "Unsupported save size"; return false; }
+    std::ifstream file(P(path), std::ios::binary);
+    auto data = std::shared_ptr<u8[]>(new u8[size]);
+    if (!file.read(reinterpret_cast<char*>(data.get()), size) || file.peek() != EOF)
+    { error = "Save changed while reading; refresh to retry"; return false; }
+    try
+    {
+        auto save = pksm::Sav::getSave(data, size);
+        if (!save) { error = "Unrecognized or incomplete save"; return false; }
+        const int generation = GenNumber(save->generation());
+        if (generation < 3 || generation > 6)
+        { error = "Only generation 3–6 saves are supported"; return false; }
+        if (!save->checksumsValid())
+        { error = "Save checksum failed; finish saving and refresh"; return false; }
+        DexSnapshot result;
+        result.generation = generation;
+        result.game = GameNameOf(*save);
+        result.trainer = save->otName();
+        const int last = generation == 3 ? 386 : generation == 4 ? 493 : generation == 5 ? 649 : 721;
+        for (int id = 1; id <= last; ++id)
+        {
+            if (!save->speciesDex(pksm::Species{(u16)id}, result.seen[id], result.caught[id]))
+            { error = "Invalid Pokédex block"; return false; }
+            result.seen[id] = result.seen[id] || result.caught[id];
+        }
+        out = std::move(result);
+        return true;
+    }
+    catch (const std::exception&)
+    { error = "Invalid save data"; return false; }
+}
 
 std::unique_ptr<Save> Save::Open(const std::string& path, std::string& error, bool romHack)
 {

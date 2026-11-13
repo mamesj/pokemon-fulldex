@@ -195,6 +195,11 @@ final class Updates {
     // launch: only show a dialog when a new version is available (the list just opened).
     static void check(final Activity a) { check(a, false); }
     static void check(final Activity a, final boolean launch) {
+        // Fork builds must never offer an upstream APK that replaces this feature.
+        if (a.getPackageName().equals("io.github.coolman4128.fulldex.nationaldex")) {
+            if (!launch) say(a, "National Dex development build. Install updates from your local build.");
+            return;
+        }
         new Thread(() -> {
             try {
                 String list = releasesUrl(a);

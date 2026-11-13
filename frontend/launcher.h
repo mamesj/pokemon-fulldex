@@ -1,4 +1,6 @@
 #pragma once
+#include "national_dex.h"
+#include "national_dex_art.h"
 #include <pthread.h>
 #include <functional>
 // The game picker of the all-games download (one program for every game): finds the players'
@@ -2671,7 +2673,8 @@ inline std::string HubDevice()
 }
 inline bool HubOnLocked(const HubState& h) { return h.set.provider != "off" && !(h.set.provider == "google" && h.set.googleRefreshToken.empty()); }
 inline const char* HubProvider(const std::string& p) { return p == "google" ? "Google Drive" : p == "webdav" ? "WebDAV" : p == "folder" ? "A Synced Folder" : "Off"; }
-inline std::string HubSig() { return std::to_string(Hub().version.load()) + "." + std::to_string(HubLink::Version()); }
+inline void DexPoll();
+inline std::string HubSig() { DexPoll(); return std::to_string(Hub().version.load()) + "." + std::to_string(HubLink::Version()); }
 inline std::string SettingSentence(const std::string& s); // (below: capitals made a sentence)
 // MOVE POKEMON (the Hub's second row): the Pokémon in a box of one of the player's games, and moving
 // one to another of them (pokemon_hub.h: the rules, the conversion, both saves backed up first).
@@ -3293,13 +3296,19 @@ inline bool SavesBack();
 inline bool SavesMove(int dir);
 inline int SavesSlotAt(int x, int y);
 inline std::string SavesTitle();
+inline void DexOpen();
+inline bool DexEnter(int row);
+inline int DexRows();
+inline void DexPoll();
 inline bool HubEnter(int row)
 {
+    if (HubMode() == 4 && !Mover().open) return DexEnter(row);
     if (HubMode() == 3 && !Mover().open) return SavesEnter(row);
     if (Mover().open || HubMode() != 0) return false;
     GlassFocus& F = Focus();
     if (row == 0) { HubMode() = 1; F.prow = 0; }
     else if (row == 2) { HubMode() = 2; F.prow = 2; }
+    else if (row == 4) { DexOpen(); return true; }
     else if (row == 3) return false; // (Discord: a link, nothing to open here)
     else { MoverShow(true); F.prow = MOVER_FIRST; }
     F.pact = -1; F.rScroll = 0;
@@ -4396,16 +4405,16 @@ inline int ThemePick(const std::string& pick)
     }
     return 0;
 }
-// (The Fulldex Discord: people to trade with, help, news. The Hub's last row.)
+// (The Fulldex Discord: people to trade with, help, news.)
 static const char* const kDiscordUrl = "https://discord.gg/pnGeMYyJR";
 static const char* const kReleasesUrl = "https://github.com/mamesj/pokemon-fulldex/releases";
-inline int HubRows() { return Mover().open ? MoverRows() : HubMode() == 0 ? 4 : HubMode() == 2 ? TradeRows() : HubMode() == 3 ? SavesRows() : HUB_FIRST + (int)HubGames().size(); }
+inline int HubRows() { return Mover().open ? MoverRows() : HubMode() == 0 ? 5 : HubMode() == 4 ? DexRows() : HubMode() == 2 ? TradeRows() : HubMode() == 3 ? SavesRows() : HUB_FIRST + (int)HubGames().size(); }
 inline std::vector<std::string> HubActions(int row)
 {
     if (Mover().open) return MoverActions(row);
     if (HubMode() == 2) return TradeActions(row);
     if (HubMode() == 3) return SavesDs() ? std::vector<std::string>(10, "Slot") : std::vector<std::string>(); // (Manage Saves: its slots)
-    if (HubMode() == 0) return {};
+    if (HubMode() == 0 || HubMode() == 4) return {};
     HubLoad();
     const std::vector<HubGame> games = HubGames();
     HubState& h = Hub();
@@ -4518,6 +4527,7 @@ inline void HubStart(std::function<void()> job)
 // A on one of the Hub's actions (row, its action). What to say, if anything ("" for nothing).
 inline std::string HubDo(int row, int act)
 {
+    if (HubMode() == 4) return "";
     if (Mover().open) return MoverDo(row, act);
     if (HubMode() == 2) return TradeDo(row, act);
     if (HubMode() == 3) return SavesSlotDo(act);
@@ -4642,6 +4652,7 @@ inline void OpenSupportAsk()
     F.dPaths = { "#open:https://buymeacoffee.com/mamesj", "#open:https://paypal.me/mamesj", "#close" };
 }
 #include "saves_page.h"
+#include "national_dex_page.h"
 inline std::string SavesTitle() { return LauncherText::Tr("Manage Saves") + "   \xC2\xB7   " + Saves().name; }
 inline int PageRows(int page) { return page == SIDE_LAUNCHER ? LauncherRows() : page == SIDE_ABOUT ? 5 : page == SIDE_ROMS ? std::max(1, (int)RomList().size()) : page == SIDE_HUB ? HubRows() : 0; }
 // The cards of the About page that open a page when tapped, as drawn (cleared each frame it is drawn).
@@ -4717,6 +4728,7 @@ inline bool PageMove(int dir)
     if (F.page == SIDE_ROMS || F.page == SIDE_HUB)
     {
         // (The list, and right of it the chosen row's actions: a ROM's, or the Hub's.)
+        if (F.page == SIDE_HUB && HubMode() == 4 && !Mover().open && DexMove(dir)) return true;
         if (F.page == SIDE_HUB && HubMode() == 3 && !Mover().open && SavesMove(dir)) return true; // (Manage Saves: its slots, a grid)
         const int n = F.page == SIDE_HUB ? HubRows() : (int)RomList().size();
         const int na = F.page == SIDE_HUB ? (int)HubActions(F.prow).size() : RomActions();
@@ -4769,6 +4781,7 @@ inline bool PageBack()
     if (F.page == SIDE_LAUNCHER && F.side < 0 && LauncherMode() == 5) { LauncherMode() = 0; F.prow = 3; F.rScroll = 0; Themes().msg.clear(); Hub().version++; return true; } // (the Gallery: back to its menu)
     if (F.page == SIDE_LAUNCHER && F.side < 0 && LauncherMode() == 3) { LauncherMode() = 2; F.prow = 2; F.rScroll = 0; Themes().msg.clear(); Hub().version++; return true; } // (the Library: back to My Themes)
     if (F.page == SIDE_LAUNCHER && F.side < 0 && LauncherMode() != 0) { F.prow = LauncherMode() == 1 ? 1 : 2; LauncherMode() = 0; F.rScroll = 0; Themes().msg.clear(); Hub().version++; return true; } // (back to its menu)
+    if (F.page == SIDE_HUB && F.side < 0 && HubMode() == 4 && !Mover().open) return DexBack();
     if (F.page == SIDE_HUB && F.side < 0 && HubMode() == 3 && !Mover().open) return SavesBack(); // (Manage Saves: off a slot, then the games)
     if (F.page == SIDE_HUB && F.side < 0 && F.pact < 0 && Mover().open && Mover().swapping) { Mover().swapping = false; Mover().put = -1; Mover().msg.clear(); Hub().version++; return true; }
     if (F.page == SIDE_HUB && F.side < 0 && F.pact < 0 && Mover().open) { MoverShow(false); HubMode() = 0; F.prow = 1; F.rScroll = 0; return true; }
@@ -5051,7 +5064,7 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
     const int barH = portP ? (int)(44 * u) : sp.tabsY * 2 + sp.tabsH;
     const int L = sp.bannerX, R = sp.bannerX + sp.bannerW, top = sp.pageTop > 0 ? sp.pageTop : barH + (int)((portP ? 10 : 18) * u), bottom = sp.pageBottom > 0 ? sp.pageBottom : PhoneLook() && c.h > c.w && sp.navY > 0 ? sp.navY - (int)(12 * u) : c.h - (int)((ShortNow() ? 14 : 64) * u); // (a phone sideways: the panels run to the foot of the screen, the back button is in the bar)
     const float titleY = sp.pageTitleY > 0 ? (float)sp.pageTitleY : barH * 0.5f;
-    GT(c, sp.tabsX + (int)(6 * u), titleY, F.page == SIDE_ROMS ? "ROMs" : F.page == SIDE_HUB ? (Mover().open ? "Move Pok\xC3\xA9mon" : HubMode() == 1 ? "Cloud Saves" : HubMode() == 2 ? "Trade" : HubMode() == 3 ? SavesTitle() : std::string("Hub")) : F.page == SIDE_SETTINGS ? (F.pageTitle.empty() ? std::string("Settings") : F.pageTitle) : F.page == SIDE_LAUNCHER ? (LauncherMode() == 1 ? "Theme Editor" : LauncherMode() == 2 ? "My Themes" : LauncherMode() == 3 ? "Theme Library" : LauncherMode() == 5 ? "Theme Gallery" : LauncherMode() == 4 ? "Font" : "Launcher") : "About", 26 * u, text, true);
+    GT(c, sp.tabsX + (int)(6 * u), titleY, F.page == SIDE_ROMS ? "ROMs" : F.page == SIDE_HUB ? (Mover().open ? "Move Pok\xC3\xA9mon" : HubMode() == 1 ? "Cloud Saves" : HubMode() == 2 ? "Trade" : HubMode() == 3 ? SavesTitle() : HubMode() == 4 ? std::string("National Dex") : std::string("Hub")) : F.page == SIDE_SETTINGS ? (F.pageTitle.empty() ? std::string("Settings") : F.pageTitle) : F.page == SIDE_LAUNCHER ? (LauncherMode() == 1 ? "Theme Editor" : LauncherMode() == 2 ? "My Themes" : LauncherMode() == 3 ? "Theme Library" : LauncherMode() == 5 ? "Theme Gallery" : LauncherMode() == 4 ? "Font" : "Launcher") : "About", 26 * u, text, true);
     const std::string where = std::string("Fulldex   \xC2\xB7   ") + PlatformLabel();
     if (!ShortNow() && !portP) GT(c, R - GW(where, 16 * u, true), titleY, where, 16 * u, hint, true);
     if (F.page == SIDE_ROMS)
@@ -6042,6 +6055,7 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
 #endif
         return;
     }
+    if (F.page == SIDE_HUB && !Mover().open && HubMode() == 4) { DrawDexPage(c, solid, u, L, R, top, bottom); return; }
     if (F.page == SIDE_HUB && !Mover().open && HubMode() == 3) { DrawSavesPage(c, solid, u, L, R, top, bottom); return; } // (Manage Saves)
     if (F.page == SIDE_HUB && !Mover().open && HubMode() == 0)
     {
@@ -6063,7 +6077,8 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
         lk.unlock();
         const int moverGames = (int)MoverGames().size();
         const bool stkP = PhoneLook() && c.h > c.w; const int rw = stkP ? R - L : (int)(400 * u), gap = (int)(18 * u), lw2 = stkP ? R - L : R - L - rw - gap, lhP = stkP ? (int)((bottom - top) * 0.55f) : bottom - top, dTopP = stkP ? top + lhP + gap : top, dHP = stkP ? bottom - dTopP : bottom - top, pad = (int)(14 * u);
-        const int rowH = (int)(72 * u), rg = (int)(10 * u), n = 4;
+        const int rg = (int)(6 * u), n = 5;
+        const int rowH = std::max(24, std::min((int)(64 * u), (lhP - 2 * pad) / n - rg));
         const HubLink::Status link = HubLink::Snapshot();
         Menu::FrostBox(c, solid, L, top, lw2, lhP, 18 * u);
         F.prow = std::max(0, std::min(F.prow, n - 1));
@@ -6098,6 +6113,10 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
                 sub = "With a friend online or on the same Wi-Fi, or to another of your devices";
                 st = link.state == HubLink::State::Linked ? "Linked" : link.state == HubLink::State::Online ? "Online" : link.state == HubLink::State::Hosting ? "Room Open" : link.state == HubLink::State::Browsing ? "Looking" : "Same Wi-Fi";
                 if (link.state != HubLink::State::Off) col = 0xFF8CC8FFu;
+            }
+            else if (i == 4)
+            {
+                name = "National Dex"; sub = "Combine Pokédex progress from your selected saves"; st = "Kanto–Kalos";
             }
             else if (i == 3)
             {
@@ -6137,9 +6156,13 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
             GT(c, cx, cy + 28 * u, v, 15 * u, text, true);
             (void)cw;
         };
-        GT(c, ix, y + 14 * u, F.prow == 0 ? "Cloud Saves" : F.prow == 2 ? "Trade" : F.prow == 3 ? "Fulldex Discord" : "Move Pok\xC3\xA9mon", 22 * u, text, true);
+        GT(c, ix, y + 14 * u, F.prow == 4 ? "National Dex" : F.prow == 0 ? "Cloud Saves" : F.prow == 2 ? "Trade" : F.prow == 3 ? "Fulldex Discord" : "Move Pok\xC3\xA9mon", 22 * u, text, true);
         y += (int)(44 * u);
-        if (F.prow == 0)
+        if (F.prow == 4)
+        {
+            para("Select your saves and regions to track seen and caught Pokémon together. Saves are only read, never changed.", text, 14 * u);
+        }
+        else if (F.prow == 0)
         {
             if (on)
             {

@@ -1,0 +1,19 @@
+name: National Dex
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure ROM-free checks
+        run: cmake -S tests/national_dex -B build-national-dex-checks -G Ninja -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build-national-dex-checks --parallel 3
+      - name: Check readers, model, artwork and launcher
+        run: ctest --test-dir build-national-dex-checks --output-on-failure

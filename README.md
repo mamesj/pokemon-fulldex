@@ -361,6 +361,12 @@ It is a beta: back up your saves, and please [report](#reporting-a-bug) anything
 
 ## Features
 
+### National Dex (this fork)
+
+**Hub → National Dex** tracks seen/caught progress across selected GBA, DS and 3DS
+saves for Kanto through Kalos. See [setup, supported formats and build instructions](docs/NATIONAL_DEX.md).
+Build with `SSR_POKEMON_HUB=ON`, or use `tools/android/build_national_dex.sh`.
+
 ### Settings
 
 The same on every platform: on the game list's settings page (**H**, or **Y** / **△** on a

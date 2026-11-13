@@ -487,29 +487,10 @@ target_sources(ssrecomp PRIVATE frontend/pokedaisy/pk_nds_field.cpp frontend/pok
 # The Pokémon hub (frontend/pokemon_hub.cpp): moving Pokémon between the player's games, on
 # PKSM-Core (third_party/PKSM-Core: FlagBrew, GPL-3.0), whose data files are built in by
 # tools/pksm/embed_data.py. C++20, as PKSM-Core wants; the rest of the program sees only
-# pokemon_hub.h. Off until its screens are in the launcher.
+# pokemon_hub.h. Enables save transfers and the read-only National Dex page.
 option(SSR_POKEMON_HUB "Build the Pokémon hub (PKSM-Core) in" OFF)
 if(SSR_POKEMON_HUB)
-    find_package(Python3 REQUIRED COMPONENTS Interpreter)
-    set(PKSMCORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/PKSM-Core")
-    file(GLOB_RECURSE PKSMCORE_SOURCES CONFIGURE_DEPENDS "${PKSMCORE_DIR}/source/*.cpp" "${PKSMCORE_DIR}/memecrypto/*.c")
-    file(GLOB_RECURSE PKSMCORE_DATA CONFIGURE_DEPENDS "${PKSMCORE_DIR}/personals/*" "${PKSMCORE_DIR}/strings/*.txt")
-    file(GLOB_RECURSE _pksm_include_items LIST_DIRECTORIES true "${PKSMCORE_DIR}/include/*")
-    set(PKSMCORE_INCLUDE_DIRS "${PKSMCORE_DIR}/include")
-    foreach(_item ${_pksm_include_items})
-        if(IS_DIRECTORY "${_item}")
-            list(APPEND PKSMCORE_INCLUDE_DIRS "${_item}")
-        endif()
-    endforeach()
-    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/pksmcore_data_builtin.cpp"
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/pksm/embed_data.py" "${PKSMCORE_DIR}"
-                "${CMAKE_CURRENT_BINARY_DIR}/pksmcore_data_builtin.cpp"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/tools/pksm/embed_data.py" ${PKSMCORE_DATA} VERBATIM)
-    add_library(pokemonhub STATIC ${PKSMCORE_SOURCES} "${CMAKE_CURRENT_BINARY_DIR}/pksmcore_data_builtin.cpp"
-        frontend/pokemon_hub.cpp)
-    set_target_properties(pokemonhub PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-    target_include_directories(pokemonhub PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/pksmcore-config"
-        ${PKSMCORE_INCLUDE_DIRS} "${PKSMCORE_DIR}/memecrypto" "${PKSMCORE_DIR}/pcg-cpp/include")
+    include(cmake/PokemonHub.cmake)
     target_link_libraries(ssrecomp PRIVATE pokemonhub)
     target_compile_definitions(ssrecomp PRIVATE SSR_POKEMON_HUB)
 endif()
