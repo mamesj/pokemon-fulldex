@@ -3170,6 +3170,35 @@ int main(int argc, char** argv)
                     }
                     return flat;
                 };
+                // The label as drawn, in whatever language the game is: from the first column after
+                // the plain ones that is not plain to the last before the plain columns at the right
+                // end, measured on the button itself each time. The cuts were measured on one
+                // language's labels; a wider label in another was split, its ends drawn at the ends
+                // of the button. The cut's own range is kept as the least, so a label that fits it
+                // is drawn as before.
+                int lx0 = c.lx0, lx1 = c.lx1;
+                {
+                    uint32_t flatRow[64];
+                    const int rows = std::min(c.sh, 64);
+                    for (int y = 0; y < rows; y++) flatRow[y] = rowColour(c.sy + y);
+                    auto plain = [&](int x) {
+                        for (int y = 0; y < rows; y++)
+                            if ((b[(c.sy + y) * 256 + x] & 0xFFFFFF) != flatRow[y]) return false;
+                        return true;
+                    };
+                    const int end = c.sx + c.sw;
+                    int a = c.tileX + c.tileW;
+                    while (a < end && plain(a)) a++;
+                    int r = end - 1;
+                    while (r > a && !plain(r)) r--; // (past the right end's rounded edge)
+                    int e = r;
+                    while (e > a && plain(e)) e--;
+                    if (a < end && r > a && e >= a && e < r)
+                    {
+                        lx0 = std::min(lx0, a);
+                        lx1 = std::max(lx1, e + 1);
+                    }
+                }
                 for (int y0 = c.sy; y0 < c.sy + c.sh;)
                 {
                     const uint32_t col = rowColour(y0);
@@ -3182,9 +3211,9 @@ int main(int argc, char** argv)
                     sc.items.push_back(body);
                     y0 = y1;
                 }
-                piece(c.sx, c.lx0 - c.sx, dx);
-                piece(c.lx1, c.sx + c.sw - c.lx1, dx + dw - (c.sx + c.sw - c.lx1) * scl);
-                piece(c.lx0, c.lx1 - c.lx0, dx + (dw - (c.lx1 - c.lx0) * scl) / 2);
+                piece(c.sx, lx0 - c.sx, dx);
+                piece(lx1, c.sx + c.sw - lx1, dx + dw - (c.sx + c.sw - lx1) * scl);
+                piece(lx0, lx1 - lx0, dx + (dw - (lx1 - lx0) * scl) / 2);
             };
             if (cmd)
             {
