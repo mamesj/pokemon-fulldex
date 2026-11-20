@@ -23,6 +23,7 @@
 #include "thirdparty/stb_image.h"
 #undef STB_IMAGE_IMPLEMENTATION
 #include "launcher.h"
+#include "diagnostics.h" // (REPORT A BUG: the version, the device and the end of game.log)
 #include "n3ds.h" // (Omega Ruby and Alpha Sapphire: listed and started)
 #include "cloud_autosync.h"
 #include "ui_lang_sdl.h"
@@ -889,7 +890,26 @@ int PickGame(const std::vector<Launcher::Game>& gamesIn, int selected, const std
                             if (F.pact < 0) { if (!Launcher::HubEnter(F.prow) && !Launcher::HubActions(F.prow).empty()) F.pact = 0; else if (Launcher::HubTop() && F.prow == 3) note = "SCAN THE CODE WITH YOUR PHONE"; }
                             else { const std::string said = Launcher::HubDo(F.prow, F.pact); if (!said.empty()) note = said; if (F.dialog == 3) { kbLayer = 0; kbBuild(); } }
                         }
-                        else if (!Launcher::PageUrl(F.page, F.prow).empty()) note = "OPEN IT ON YOUR PHONE OR PC";
+                        else
+                        {
+                            const std::string page = Launcher::PageUrl(F.page, F.prow);
+                            if (page == Launcher::kDiagnosticsUrl)
+                            {
+                                // (No clipboard on the Switch: diagnostics.txt beside game.log.)
+                                char system[160] = {};
+                                std::snprintf(system, sizeof system, "%s, %d cores, %d MB RAM", SDL_GetPlatform(), SDL_GetCPUCount(), SDL_GetSystemRAM());
+                                std::vector<std::pair<std::string, std::string>> fields = {
+                                    { "version", FULLDEX_VERSION },
+                                    { "platform", Diagnostics::PlatformName() },
+                                    { "system", system },
+                                    { "language", UiLang::Codes[UiLang::lang] },
+                                };
+                                bool copied = false;
+                                const std::string saved = Diagnostics::Report(Diagnostics::FindLog("."), fields, nullptr, copied);
+                                note = !saved.empty() ? "SAVED TO diagnostics.txt" : "COULD NOT SAVE DIAGNOSTICS";
+                            }
+                            else if (!page.empty()) note = "OPEN IT ON YOUR PHONE OR PC";
+                        }
                     }
                     if (bDown) Launcher::PageBack();
                     if (down & HidNpadButton_Plus) quitList = true;
@@ -1490,6 +1510,7 @@ bool Start(int& argc, char**& argv)
         }
     }
     if (!freopen(logPath.c_str(), "w", stderr)) freopen("game.log", "w", stderr);
+    Diagnostics::SetLogPath(logPath);
     setvbuf(stderr, nullptr, _IOLBF, 0);
     setenv("SSR_PERF", "1", 0);
     fprintf(stderr, "[switch] started from %s\n", argc > 0 && argv[0] ? argv[0] : "?");

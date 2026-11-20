@@ -47,6 +47,7 @@
 #include "thirdparty/stb_image.h"
 #undef STB_IMAGE_IMPLEMENTATION
 #include "launcher.h"
+#include "diagnostics.h" // (REPORT A BUG: the version, the device and the end of game.log)
 #include "n3ds.h" // (Omega Ruby and Alpha Sapphire: listed and started)
 #include "now_playing.h" // (the music bar on the home screen)
 #include "discord_presence.h" // (Discord shows "In the launcher" or the game being played; needs an Application ID)
@@ -962,6 +963,30 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
     bool follow = true;
     std::string note;
     bool noteKeep = false; // (a menu action's message survives the pointer-up that follows it)
+    // (About > REPORT A BUG: the diagnostics on the clipboard, and in diagnostics.txt beside game.log.)
+    auto copyDiagnostics = [&]() -> std::string {
+        char system[160] = {};
+        std::snprintf(system, sizeof system, "%s, %d cores, %d MB RAM", SDL_GetPlatform(), SDL_GetCPUCount(), SDL_GetSystemRAM());
+        std::vector<std::pair<std::string, std::string>> fields = {
+            { "version", FULLDEX_VERSION },
+            { "platform", Launcher::PlatformLabel() },
+            { "system", system },
+            { "folder", fo.dir },
+            { "games", std::to_string(games.size()) },
+            { "language", UiLang::Codes[UiLang::lang] },
+        };
+        bool copied = false;
+        std::fflush(stderr);
+        const std::string saved = Diagnostics::Report(Diagnostics::FindLog(fo.dir), fields,
+            +[](const std::string& text) { return SDL_SetClipboardText(text.c_str()) == 0; }, copied);
+        Launcher::DiagnosticsResult() = copied ? Launcher::DIAG_COPIED : !saved.empty() ? Launcher::DIAG_SAVED : Launcher::DIAG_FAILED;
+        Launcher::DiagnosticsDoneAt() = std::chrono::steady_clock::now();
+        fprintf(stderr, "[diagnostics] copied=%d saved=%s\n", copied ? 1 : 0, saved.c_str());
+        noteKeep = true;
+        return copied ? std::string("DIAGNOSTICS COPIED")
+             : !saved.empty() ? std::string("SAVED TO diagnostics.txt")
+                              : std::string("COULD NOT SAVE DIAGNOSTICS");
+    };
     if (Launcher::ConfigValue(fo.cfg, "folders_moved") == "1")
     {
         note = "FOLDERS TIDIED: SAVES, STATES, CHEATS AND SETTINGS EACH HAVE ONE. SETTINGS TO UNDO.";
@@ -1754,6 +1779,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                 }
                 if (F.page == Launcher::SIDE_ABOUT && F.prow == 0) { Launcher::OpenSupportAsk(); return; } // (Buy Me A Coffee or PayPal)
                 const std::string url = Launcher::PageUrl(F.page, F.prow);
+                if (url == Launcher::kDiagnosticsUrl) { note = copyDiagnostics(); return; }
                 if (!url.empty() && SDL_OpenURL(url.c_str()) != 0) fprintf(stderr, "[launcher] could not open %s: %s\n", url.c_str(), SDL_GetError());
                 return;
             }
@@ -2911,6 +2937,12 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                     }
                     else if (e.type == SDL_MOUSEBUTTONUP && dOn) { dOn = false; if (dDrag) { dDrag = false; dragging = pressed = false; break; } }
                 }
+                // The About page's Copy Diagnostics card: show the press at once, before the action on release.
+                if (Launcher::Glassy(canvas) && !guide && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT &&
+                    Launcher::Focus().page == Launcher::SIDE_ABOUT && Launcher::Focus().dialog == 0)
+                    if (const char* url = Launcher::AboutLinkAt(mx, my))
+                        if (std::string(url) == Launcher::kDiagnosticsUrl)
+                            Launcher::DiagnosticsPressedAt() = std::chrono::steady_clock::now();
                 // The ROMs, Hub and Launcher lists: a finger dragged up or down scrolls them (the chosen row stays where the list was put).
                 if (Launcher::Glassy(canvas) && !guide && (Launcher::Focus().page == Launcher::SIDE_ROMS || Launcher::Focus().page == Launcher::SIDE_HUB || Launcher::Focus().page == Launcher::SIDE_LAUNCHER || Launcher::Focus().page == Launcher::SIDE_ABOUT) && Launcher::Focus().rVis > 0)
                 {
@@ -2936,6 +2968,7 @@ int PickGame(Folders& fo, std::vector<Launcher::Game>& games, int selected, bool
                 if (Launcher::Glassy(canvas) && !guide && e.type == SDL_MOUSEBUTTONUP && !dragging && Launcher::Focus().page == Launcher::SIDE_ABOUT && Launcher::Focus().dialog == 0)
                     if (const char* url = Launcher::AboutLinkAt(mx, my))
                     {
+                        if (std::string(url) == Launcher::kDiagnosticsUrl) { note = copyDiagnostics(); break; }
                         if (SDL_OpenURL(url) != 0) fprintf(stderr, "[launcher] could not open %s: %s\n", url, SDL_GetError());
                         break;
                     }
@@ -4354,6 +4387,7 @@ bool Start(int& argc, char**& argv)
         rename(logPath.c_str(), prev.c_str());
     }
     if (freopen(logPath.c_str(), "w", stderr)) setvbuf(stderr, nullptr, _IOLBF, 0);
+    Diagnostics::SetLogPath(logPath);
     fprintf(stderr, "[launcher] FullDex %s\n", FULLDEX_VERSION);
     fprintf(stderr, "[launcher] folder %s\n", fo.dir.c_str());
     if (fo.saves != fo.dir + "/saves") fprintf(stderr, "[launcher] saves folder %s\n", fo.saves.c_str()); // (SAVES FOLDER, or the phone's ROM folder)

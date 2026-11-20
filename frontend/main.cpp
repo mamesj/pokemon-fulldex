@@ -68,6 +68,8 @@
 #include "host.h"
 #include "layout.h"
 #include "ui.h"
+#include "version.h" // (FULLDEX_VERSION, for the bug report when a single-game build has no SSR_VERSION)
+#include "diagnostics.h" // (REPORT A BUG in the pause menu: the version, the game and the end of game.log)
 #ifdef SSR_GBA
 #include "gba_glass_impl.h" // (the GBA games' pause menu, drawn by this one's Menu)
 #endif
@@ -2084,8 +2086,13 @@ int main(int argc, char** argv)
         setenv("SSR_PERF", "1", 0);
 #ifndef SSR_PC_LAUNCHER
         const char* ext = SDL_AndroidGetExternalStoragePath();
-        if (!ext || !freopen((std::string(ext) + "/log.txt").c_str(), "w", stderr))
-            freopen("log.txt", "w", stderr);
+        std::string logPath = ext ? std::string(ext) + "/log.txt" : std::string("log.txt");
+        if (!ext || !freopen(logPath.c_str(), "w", stderr))
+        {
+            logPath = "log.txt";
+            freopen(logPath.c_str(), "w", stderr);
+        }
+        Diagnostics::SetLogPath(logPath);
         setvbuf(stderr, nullptr, _IOLBF, 0);
         androidArgs = { "ssrecomp", "rom.nds", "--save", std::string(dir ? dir : ".") + "/soulsilver.sav", "--fullscreen" };
         for (auto& a : androidArgs) androidArgv.push_back(a.data());
@@ -6065,7 +6072,7 @@ int main(int argc, char** argv)
     {
         M_RESUME, M_LAYOUT, M_LARGE, M_FPS60, M_FULLSCREEN, M_SMOOTH, M_WIDE, M_WIDEMAP, M_BATTLEBUTTONS, M_NAVSTYLE, M_ENCSHOWN,
         M_WIDELINES, M_AUTODETAIL, M_WIDEGPU, M_GPU3D, M_SHOWFPS, M_BUTTONS, M_PADTOUCH, M_EMULATION,
-        M_CONTROLS, M_TOUCHLAYOUT, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT,
+        M_CONTROLS, M_TOUCHLAYOUT, M_STARTBTN, M_FAST, M_FFLOWRES, M_SAVESTATE, M_LOADSTATE, M_RESET, M_QUIT, M_DIAGNOSTICS,
         M_DISPLAY, M_LANGUAGE, M_SOUND, M_GRAPHICS, M_CONTROLMENU, M_BACK, M_CHEATS, M_NOTHING,
         M_VOLUME, M_MUSIC, M_EFFECTS, M_MUSICQUIET, M_SONGNAMES, M_FFMUTE, M_ASPECT, M_RA, M_RA_ON, M_RA_ACCOUNT, M_RA_GAME, M_RA_LOGIN, M_RA_TYPED, M_RA_CANCEL, M_RA_BANNER, M_BOTHVER,
         M_RA_LIST, M_ACH_POINTS, M_ACH_STATUS, M_ACH_RARITY,
@@ -6085,7 +6092,7 @@ int main(int argc, char** argv)
         M_CHEAT_ON = 49000, // ON NOW: every cheat that is on, from any folder
         M_CFOLDER0 = 50000  // (M_CFOLDER0 + i: folder i of the cheat database)
     };
-    enum { PAGE_MAIN, PAGE_KEYS, PAGE_DISPLAY, PAGE_GRAPHICS, PAGE_CONTROLS, PAGE_CHEATS, PAGE_RA, PAGE_SOUND, PAGE_RA_LIST, PAGE_RA_DETAIL, PAGE_CSEARCH, PAGE_CDETAIL, PAGE_CINFO, PAGE_BACKUPS, PAGE_RESTORE_CONFIRM, PAGE_LOAD_CONFIRM, PAGE_MATCHUPS, PAGE_COMPANION, PAGE_CPARTY, PAGE_CMON, PAGE_CBAG, PAGE_CDEX, PAGE_CDEXDETAIL, PAGE_CLOCATION, PAGE_PLAYBACK, PAGE_STATES, PAGE_SLOT, PAGE_CBATTLE, PAGE_CGUIDE, PAGE_CGUIDEENTRY, PAGE_NUZLOCKE, PAGE_RUN_CONFIRM, PAGE_QUICK_ACTIONS, PAGE_EXTRAS, PAGE_CITEM, PAGE_REFERENCE, PAGE_RSEARCH, PAGE_RDETAIL, PAGE_CMAP, PAGE_CENCOUNTERS, PAGE_HUB_SAVE, PAGE_HUB_LOAD, PAGE_HUB_CHEATS, PAGE_HUB_SETTINGS, PAGE_HUB_QUIT, PAGE_QUIT_CONFIRM, PAGE_SLOT_REPLACE, PAGE_FLY, PAGE_COUNT };
+    enum { PAGE_MAIN, PAGE_KEYS, PAGE_DISPLAY, PAGE_GRAPHICS, PAGE_CONTROLS, PAGE_CHEATS, PAGE_RA, PAGE_SOUND, PAGE_RA_LIST, PAGE_RA_DETAIL, PAGE_CSEARCH, PAGE_CDETAIL, PAGE_CINFO, PAGE_BACKUPS, PAGE_RESTORE_CONFIRM, PAGE_LOAD_CONFIRM, PAGE_MATCHUPS, PAGE_COMPANION, PAGE_CPARTY, PAGE_CMON, PAGE_CBAG, PAGE_CDEX, PAGE_CDEXDETAIL, PAGE_CLOCATION, PAGE_PLAYBACK, PAGE_STATES, PAGE_SLOT, PAGE_CBATTLE, PAGE_CGUIDE, PAGE_CGUIDEENTRY, PAGE_NUZLOCKE, PAGE_RUN_CONFIRM, PAGE_QUICK_ACTIONS, PAGE_EXTRAS, PAGE_CITEM, PAGE_REFERENCE, PAGE_RSEARCH, PAGE_RDETAIL, PAGE_CMAP, PAGE_CENCOUNTERS, PAGE_HUB_SAVE, PAGE_HUB_LOAD, PAGE_HUB_CHEATS, PAGE_HUB_SETTINGS, PAGE_HUB_QUIT, PAGE_QUIT_CONFIRM, PAGE_SLOT_REPLACE, PAGE_FLY, PAGE_DIAGNOSTICS, PAGE_COUNT };
     // UI SIZE's values (Settings::uiSize, ui.h UiScaleFor), in the picker's order; and the height
     // of the display the window is on, which "auto" goes by (not the window's own: a small window on
     // a large screen keeps the menus as they were).
@@ -6174,6 +6181,7 @@ int main(int argc, char** argv)
     bool ctlResetAsk = false; // (RESET ALL chosen once: the next choice of it resets, anything else not)
     (void)ctlRowBack;
     bool confirmReset = false; // PAGE_QUIT_CONFIRM asks about RESET GAME (else QUIT GAME)
+    int diagResult = 0;        // PAGE_DIAGNOSTICS: 1 copied, 2 saved only, 3 neither
     int loadFromSlot = -1;     // PAGE_LOAD_CONFIRM opened from LOAD's grid: that slot (back returns to it)
 #ifndef __SWITCH__
     // SCREEN LAYOUT's eight choices: MERGED, HYBRID with the large screen chosen automatically, the
@@ -6523,6 +6531,13 @@ int main(int argc, char** argv)
             if (padName.size() > 11 && padName.compare(padName.size() - 11, 11, " CONTROLLER") == 0) padName.resize(padName.size() - 11);
             link(M_CONTROLMENU, "CONTROLS", Glass::I_PAD, padName, "Keys and buttons, shortcuts, touch",
                  "Opens the Controls settings: your keys and controller buttons, Fulldex's shortcuts, the START button and the touch controls.");
+            // (A bug report is rare: a row here, not an eleventh tile that would shrink the pause menu's grid.)
+            add(M_DIAGNOSTICS, "REPORT A BUG", "");
+            MenuItem& report = menu.items.back();
+            report.kind = Menu::K_ACTION;
+            report.icon = Glass::I_BUG;
+            report.sub = "Version, device and the end of game.log";
+            report.desc = "Copies the version, platform, game, display settings and the last 200 lines of game.log to the clipboard, and writes diagnostics.txt beside the log. Paste it into Discord or a GitHub issue.";
         }
         else if (menuPage == PAGE_HUB_QUIT)
         {
@@ -6537,6 +6552,14 @@ int main(int argc, char** argv)
             add(M_BACK, "CANCEL", "");
             menu.style = 2; // (a card with two buttons: Menu::DrawDialog)
             menu.dialogIcon = confirmReset ? Glass::I_REWIND : Glass::I_POWER;
+        }
+        else if (menuPage == PAGE_DIAGNOSTICS)
+        {
+            // (A card that says what happened, with the game still paused: COPY AGAIN or CLOSE.)
+            add(M_DIAGNOSTICS, "COPY AGAIN", "");
+            add(M_BACK, "CLOSE", "");
+            menu.style = 2;
+            menu.dialogIcon = Glass::I_BUG;
         }
         else if(menuPage==PAGE_EXTRAS)
         {
@@ -10677,6 +10700,45 @@ int main(int argc, char** argv)
             case M_HUB_CHEATS: goPage(PAGE_HUB_CHEATS, M_CHEATS); hit = -1; break;
             case M_HUB_FAST: fastLock = !fastLock; cfg.fastLock = fastLock; cfg.Save(opt.config); break;
             case M_HUB_SETTINGS: goPage(PAGE_HUB_SETTINGS, M_DISPLAY); hit = -1; break;
+            case M_DIAGNOSTICS:
+            {
+                // (REPORT A BUG: the player's clipboard, and diagnostics.txt beside game.log.)
+                std::fflush(stderr);
+                char system[160] = {};
+                std::snprintf(system, sizeof system, "%s, %d cores, %d MB RAM", SDL_GetPlatform(), SDL_GetCPUCount(), SDL_GetSystemRAM());
+                int ww = 0, wh = 0;
+                if (window) SDL_GetWindowSize(window, &ww, &wh);
+                std::string game = opt.rom;
+                const std::size_t slash = game.find_last_of("/\\");
+                if (slash != std::string::npos) game = game.substr(slash + 1);
+#ifdef SSR_VERSION
+                const char* appVersion = SSR_VERSION;
+#else
+                const char* appVersion = FULLDEX_VERSION; // (the all-games build: launcher.h's number)
+#endif
+                char* base = SDL_GetBasePath();
+                const std::string dir = base ? base : ".";
+                if (base) SDL_free(base);
+                std::vector<std::pair<std::string, std::string>> fields = {
+                    { "version", appVersion },
+                    { "platform", Diagnostics::PlatformName() },
+                    { "system", system },
+                    { "game", game },
+                    { "layout", cfg.layout },
+                    { "ui size", cfg.uiSize },
+                    { "language", UiLang::Codes[UiLang::lang] },
+                    { "3D", cfg.gpu3d ? "GPU" : "software" },
+                    { "screen", std::to_string(ww) + "x" + std::to_string(wh) },
+                };
+                bool copied = false;
+                const std::string saved = Diagnostics::Report(Diagnostics::FindLog(dir), fields,
+                    +[](const std::string& text) { return SDL_SetClipboardText(text.c_str()) == 0; }, copied);
+                // (Stay paused, and say what happened on a card: COPY AGAIN or CLOSE.)
+                diagResult = copied ? 1 : !saved.empty() ? 2 : 3;
+                goPage(PAGE_DIAGNOSTICS, M_BACK);
+                hit = -1;
+                break;
+            }
             case M_HUB_QUIT: confirmReset = false; goPage(PAGE_QUIT_CONFIRM, M_BACK); hit = -1; break; // (straight to "are you sure?")
             case M_STATES:goPage(PAGE_STATES,M_SLOT0);hit=-1;break;
             case M_SLOT_SAVE:
@@ -10778,6 +10840,7 @@ int main(int argc, char** argv)
                     hubPage=-1;goPage(PAGE_MAIN,tileId);hit=-1;break;
                 }
                 if(menuPage==PAGE_QUIT_CONFIRM){if(confirmReset)goPage(PAGE_PLAYBACK,M_RESET);else goPage(PAGE_MAIN,M_HUB_QUIT);hit=-1;break;}
+                if(menuPage==PAGE_DIAGNOSTICS){goPage(PAGE_HUB_SETTINGS,M_DIAGNOSTICS);hit=-1;break;}
                 if(menuPage==PAGE_MATCHUPS){goPage(PAGE_COMPANION,M_MATCHUPS);hit=-1;break;}
                 if(menuPage==PAGE_CMAP){goPage(PAGE_CLOCATION,M_CMAP);hit=-1;break;}
                 if(menuPage==PAGE_CENCOUNTERS){goPage(PAGE_CLOCATION,M_CENCOUNTERS);hit=-1;break;}
@@ -13484,7 +13547,7 @@ int main(int argc, char** argv)
             std::string hint = touchPadUsed && touchPad.visible ? "TAP: CHOOSE   OUTSIDE: BACK"
                                : btn(Controls::A) + ": SELECT   " + btn(Controls::B) + ": BACK";
             const int selId = menu.selected >= 0 && menu.selected < (int)menuIds.size() ? menuIds[menu.selected] : -1;
-            static const char* pageTitle[] = { "", "KEYS AND BUTTONS", "DISPLAY", "GRAPHICS", "CONTROLS", "CHEATS", "RETROACHIEVEMENTS", "SOUND", "ACHIEVEMENTS", "ACHIEVEMENT", "SEARCH CHEATS", "CHEAT DETAILS", "DATABASE INFO", "SAVE BACKUPS", "RESTORE SAVE", "LOAD STATE", "TYPE MATCHUPS", "COMPANION", "PARTY", "POKEMON", "BAG", "POKEDEX", "POKEDEX ENTRY", "LOCATION", "PLAYBACK", "STATE SLOTS", "STATE SLOT", "BATTLE INFO", "GUIDE", "GUIDE HINT", "NUZLOCKE TRACKER", "RESET TRACKER", "QUICK ACTIONS", "OPTIONAL FEATURES", "ITEM DETAILS", "SEARCH REFERENCE", "SEARCH REFERENCE", "REFERENCE ENTRY", "REFERENCE MAP", "ENCOUNTERS HERE" , "SAVE", "LOAD", "CHEATS", "SETTINGS", "QUIT GAME", "QUIT GAME", "REPLACE SLOT", "FLY" };
+            static const char* pageTitle[] = { "", "KEYS AND BUTTONS", "DISPLAY", "GRAPHICS", "CONTROLS", "CHEATS", "RETROACHIEVEMENTS", "SOUND", "ACHIEVEMENTS", "ACHIEVEMENT", "SEARCH CHEATS", "CHEAT DETAILS", "DATABASE INFO", "SAVE BACKUPS", "RESTORE SAVE", "LOAD STATE", "TYPE MATCHUPS", "COMPANION", "PARTY", "POKEMON", "BAG", "POKEDEX", "POKEDEX ENTRY", "LOCATION", "PLAYBACK", "STATE SLOTS", "STATE SLOT", "BATTLE INFO", "GUIDE", "GUIDE HINT", "NUZLOCKE TRACKER", "RESET TRACKER", "QUICK ACTIONS", "OPTIONAL FEATURES", "ITEM DETAILS", "SEARCH REFERENCE", "SEARCH REFERENCE", "REFERENCE ENTRY", "REFERENCE MAP", "ENCOUNTERS HERE" , "SAVE", "LOAD", "CHEATS", "SETTINGS", "QUIT GAME", "QUIT GAME", "REPLACE SLOT", "FLY", "REPORT A BUG" };
             static_assert(sizeof(pageTitle)/sizeof(pageTitle[0])==PAGE_COUNT,"Every menu page needs a title");
             if (menuPage == PAGE_KEYS)
             {
@@ -13638,6 +13701,13 @@ int main(int argc, char** argv)
             {
                 title = confirmReset ? "RESET GAME?" : "QUIT GAME?";
                 note = "Progress since your last save in the game will be lost.";
+            }
+            if(menuPage == PAGE_DIAGNOSTICS)
+            {
+                title = diagResult == 1 ? "DIAGNOSTICS COPIED" : diagResult == 2 ? "SAVED TO diagnostics.txt" : "COULD NOT SAVE DIAGNOSTICS";
+                note = diagResult == 1 ? "Paste it into Discord or a GitHub issue."
+                     : diagResult == 2 ? "Attach diagnostics.txt, beside game.log, to your report."
+                                       : "The folder could not be written. Copy the details another way.";
             }
             // (The tiles: B goes back to the game, there being no RESUME tile.)
             if (menuPage == PAGE_MAIN)

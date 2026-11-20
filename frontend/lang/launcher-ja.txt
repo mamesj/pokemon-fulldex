@@ -341,6 +341,15 @@ Fulldex checks once each time it starts.	Fulldexは起動するたびに1回確�
 Support	サポート
 Credits	クレジット
 Report A Bug	不具合を報告
+Found something wrong? Copy the details, then paste them into Discord or a GitHub issue. Say which game, which device, and what happened just before.	不具合がありますか？詳細をコピーして、Discord または GitHub の Issue に貼り付けてください。どのゲーム、どの端末で、直前に何が起きたかを書いてください。
+A screenshot helps too. Nothing is sent until you paste it.	スクリーンショットもあると助かります。貼り付けるまで何も送信されません。
+Version, device, settings and the last 200 lines of game.log	バージョン、デバイス、設定、game.log の最後の200行
+Open the GitHub issues page	GitHub の Issue ページを開く
+DIAGNOSTICS COPIED	診断情報をコピーしました
+SAVED TO diagnostics.txt	diagnostics.txt に保存しました
+COULD NOT SAVE DIAGNOSTICS	診断情報を保存できませんでした
+Paste it into your report.	報告に貼り付けてください。
+Attach diagnostics.txt to your report.	diagnostics.txt を報告に添付してください。
 Licences	ライセンス
 Website	ウェブサイト
 Fulldex doesn't include any games. Play with ROMs from games you own.	Fulldexにはゲームは含まれていません。お持ちのゲームのROMで遊んでください。
@@ -360,8 +369,7 @@ How the HOME Menu icons are made	HOMEメニューのアイコンの作り方
 Cheats menu ideas (PR #16)	チートメニューのアイデア（PR #16）
 Everyone who reported bugs and helped test	バグを報告し、テストを手伝ってくれたみなさん
 Thank you	ありがとう
-Found something wrong? Open an issue on the GitHub page: say which game, which device, and what happened just before.	問題がありますか？GitHubのページでissueを立て、どのゲーム、どの端末か、直前に何があったかを書いてください。
-A screenshot helps, and so does game.log from the folder Fulldex runs from.	スクリーンショットと、Fulldexを実行しているフォルダのgame.logがあると助かります。
+Copy Diagnostics	診断情報をコピー
 Not affiliated with or endorsed by Nintendo, Game Freak, The Pokémon Company or the melonDS project. Pokémon is a trademark of its owners. The full licence texts are on the GitHub page.	任天堂、ゲームフリーク、株式会社ポケモン、melonDSプロジェクトとは提携・承認関係にありません。ポケモンは各権利者の登録商標です。ライセンス全文はGitHubのページにあります。
 Downloads, the latest changes and the full instructions are on the GitHub page.	ダウンロード、最新の変更、詳しい手順はGitHubのページにあります。
 Tips are welcome but never expected: see Support, at the top of this page.	投げ銭は嬉しいですが期待はしていません：このページ上部のサポートをご覧ください。

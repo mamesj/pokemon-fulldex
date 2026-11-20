@@ -1,11 +1,8 @@
 #pragma once
-// FullDex's version, shown on the About page and written to the log (releases from 1.6 on are numbered,
-// tagged vMAJOR.MINOR.PATCH). A build can set its own with -DFULLDEX_VERSION="...".
-#ifndef FULLDEX_VERSION
-#define FULLDEX_VERSION "1.6"
-#endif
+#include "version.h"
 #include <pthread.h>
 #include <functional>
+#include <chrono>
 // The game picker of the all-games download (one program for every game): finds the players'
 // ROMs, reads each one's name and icon from the ROM itself (every DS game carries a 32x32 icon
 // and its title in its banner), and draws the list. Kept free of any platform so that it can be
@@ -4819,10 +4816,39 @@ inline std::string AboutUrl(int row)
 {
     return row == 0 ? "https://buymeacoffee.com/mamesj" : row == 2 ? "https://github.com/mamesj/pokemon-fulldex/issues" : row == 4 ? "https://github.com/mamesj/pokemon-fulldex" : row == 3 ? "https://github.com/mamesj/pokemon-fulldex/blob/main/frontend/fonts/FONT-LICENSES.txt" : "";
 }
+// Not a page: REPORT A BUG's row and card copy the diagnostics (the platform's launcher does it).
+inline const char* const kDiagnosticsUrl = "#diagnostics";
+// (The About page's Copy Diagnostics card: a press highlight, then what happened. Both are shown
+// on the card itself, because the launcher's bottom note is out of the way on a handheld.)
+enum { DIAG_NONE, DIAG_COPIED, DIAG_SAVED, DIAG_FAILED };
+inline std::chrono::steady_clock::time_point& DiagnosticsDoneAt()
+{
+    static std::chrono::steady_clock::time_point at{};
+    return at;
+}
+inline int& DiagnosticsResult()
+{
+    static int result = DIAG_NONE;
+    return result;
+}
+inline bool DiagnosticsDone()
+{
+    return std::chrono::steady_clock::now() - DiagnosticsDoneAt() < std::chrono::seconds(6);
+}
+inline std::chrono::steady_clock::time_point& DiagnosticsPressedAt()
+{
+    static std::chrono::steady_clock::time_point at{};
+    return at;
+}
+inline bool DiagnosticsPressed()
+{
+    return std::chrono::steady_clock::now() - DiagnosticsPressedAt() < std::chrono::milliseconds(250);
+}
 // The page a row of a page opens (none: "").
 inline std::string PageUrl(int page, int row)
 {
     if (page == SIDE_HUB) return HubTop() && row == 3 ? kDiscordUrl : "";
+    if (page == SIDE_ABOUT && row == 2) return kDiagnosticsUrl;
     return page == SIDE_ABOUT ? AboutUrl(row) : "";
 }
 inline const char* PlatformLabel()
@@ -6826,7 +6852,7 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
     const int lhA = stkA ? 5 * (rowH + rg) + 2 * pad : bottom - top, pTop = stkA ? top + lhA + (int)(18 * u) : top;
     Menu::FrostBox(c, solid, L, top, lw, lhA, 18 * u);
     static const char* names[] = { "Support", "Credits", "Report A Bug", "Licences", "Website" };
-    static const int icons[] = { Glass::I_SPARKLE, Glass::I_PEOPLE, Glass::I_INFO, Glass::I_LAYERS, Glass::I_GLOBE };
+    static const int icons[] = { Glass::I_SPARKLE, Glass::I_PEOPLE, Glass::I_BUG, Glass::I_LAYERS, Glass::I_GLOBE };
     F.pX = L + pad; F.pY = top + pad; F.pW = lw - 2 * pad; F.pRow = rowH + rg;
     for (int i = 0; i < 5; i++)
     {
@@ -6864,14 +6890,17 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
         for (const std::string& l : WrapLines(s, 16 * u, pw - 2 * ip)) { GT(c, px + ip, y + 11 * u, l, 16 * u, text, false); y += (int)(24 * u); }
         y += (int)(10 * u);
     };
-    auto card = [&](int x, int cy, int w, int h, const std::string& a, const std::string& b) {
+    auto card = [&](int x, int cy, int w, int h, const std::string& a, const std::string& b, int icon = -1, uint32_t subColour = 0, bool pressed = false) {
         TextLow() = std::max(TextLow(), cy + h);
-        Glass::Round(c, x, cy, w, h, 12 * u, 0x14FFFFFFu);
+        Glass::Round(c, x, cy, w, h, 12 * u, pressed ? 0x2EFFFFFFu : 0x14FFFFFFu);
         float fa = 16 * u, fb = 13 * u;
-        while (fa > 10 * u && GW(a, fa, true) > w - (int)(28 * u)) fa -= u;
-        while (fb > 9 * u && GW(b, fb, true) > w - (int)(28 * u)) fb -= u;
-        GT(c, x + (int)(14 * u), cy + h * 0.36f, a, fa, text, true);
-        GT(c, x + (int)(14 * u), cy + h * 0.70f, b, fb, hint, true);
+        const int tx = x + (icon >= 0 ? (int)(48 * u) : (int)(14 * u));
+        const int room = w - (icon >= 0 ? (int)(64 * u) : (int)(28 * u));
+        if (icon >= 0) Glass::DrawIcon(c, icon, x + (int)(26 * u), cy + h * 0.5f, 13 * u, text);
+        while (fa > 10 * u && GW(a, fa, true) > room) fa -= u;
+        while (fb > 9 * u && GW(b, fb, true) > room) fb -= u;
+        GT(c, tx, cy + h * 0.36f, a, fa, text, true);
+        GT(c, tx, cy + h * 0.70f, b, fb, subColour ? subColour : hint, true);
     };
 #ifdef __SWITCH__
     const char* open = "Open it on your phone or PC";
@@ -6899,10 +6928,13 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
         }
     };
     AboutLinks().clear();
-    auto link = [&](int lx, int ly, int lw, int lh, const char* url) {
+    auto hit = [&](int lx, int ly, int lw, int lh, const char* url) {
         const int linkTop = stkA ? std::max(ly, pTop) : ly;
         const int linkBottom = stkA ? std::min(ly + lh, bottom) : ly + lh;
         if (linkBottom > linkTop) AboutLinks().push_back({ lx, linkTop, lw, linkBottom - linkTop, url });
+    };
+    auto link = [&](int lx, int ly, int lw, int lh, const char* url) {
+        hit(lx, ly, lw, lh, url);
         Glass::DrawIcon(c, Glass::I_CHEVRON_R, lx + lw - (int)(18 * u), ly + lh * 0.5f, 7 * u, hint);
     };
     if (F.prow == 0)
@@ -6981,10 +7013,32 @@ inline void DrawPage(Canvas& c, const GlassSpots& sp, bool solid, float u)
     else if (F.prow == 2)
     {
         heading("Report A Bug");
-        para("Found something wrong? Open an issue on the GitHub page: say which game, which device, and what happened just before.");
-        para("A screenshot helps, and so does game.log from the folder Fulldex runs from.");
-        card(px + ip, y, pw - 2 * ip, (int)(64 * u), "github.com/mamesj/pokemon-fulldex/issues", open);
-        link(px + ip, y, pw - 2 * ip, (int)(64 * u), "https://github.com/mamesj/pokemon-fulldex/issues");
+        para("Found something wrong? Copy the details, then paste them into Discord or a GitHub issue. Say which game, which device, and what happened just before.");
+        para("A screenshot helps too. Nothing is sent until you paste it.");
+        // (One primary action, then the issues page as a plain link: they are not the same kind of choice.)
+        const int result = DiagnosticsDone() ? DiagnosticsResult() : DIAG_NONE;
+        const int ch = (int)(64 * u);
+        const char* sub = result == DIAG_COPIED ? "DIAGNOSTICS COPIED"
+                        : result == DIAG_SAVED ? "SAVED TO diagnostics.txt"
+                        : result == DIAG_FAILED ? "COULD NOT SAVE DIAGNOSTICS"
+                        : "Version, device, settings and the last 200 lines of game.log";
+        const uint32_t good = 0xFF7BE0A0u, bad = 0xFFFF8080u;
+        card(px + ip, y, pw - 2 * ip, ch, "Copy Diagnostics", sub, Glass::I_BUG,
+             result == DIAG_FAILED ? bad : result != DIAG_NONE ? good : 0, DiagnosticsPressed());
+        hit(px + ip, y, pw - 2 * ip, ch, kDiagnosticsUrl);
+        y += ch;
+        // (The line the player needs next, right under the button rather than in the bottom note.)
+        if (result == DIAG_COPIED || result == DIAG_SAVED)
+        {
+            GT(c, px + ip, y + 12 * u, result == DIAG_COPIED ? "Paste it into your report." : "Attach diagnostics.txt to your report.",
+               16 * u, good, true);
+            y += (int)(30 * u);
+        }
+        y += (int)(12 * u);
+        const int linkW = GW("Open the GitHub issues page", 15 * u, true) + (int)(44 * u);
+        GT(c, px + ip, y + 10 * u, "Open the GitHub issues page", 15 * u, text, true);
+        link(px + ip, y, linkW, (int)(32 * u), "https://github.com/mamesj/pokemon-fulldex/issues");
+        TextLow() = std::max(TextLow(), y + (int)(32 * u));
     }
     else if (F.prow == 3)
     {
@@ -7197,6 +7251,8 @@ inline void DrawGlass(Canvas& c, const std::vector<Game>& games, const View& v, 
                     + "/b" + std::to_string(Focus().banner) + "/q" + std::to_string(Focus().popup) + "/m" + std::to_string(menuGame)
                     + (Focus().page == SIDE_ROMS ? "/r" + std::to_string(Focus().pact) + "," + std::to_string(RomList().size()) + ","
                        + std::to_string(std::count_if(RomList().begin(), RomList().end(), [](const Game& g) { return g.hidden; })) : std::string());
+    if (Focus().page == SIDE_ABOUT) // (the Copy Diagnostics card's press and result: the page may be a cached picture)
+        key += "/diag" + std::to_string(DiagnosticsDone() ? DiagnosticsResult() : 0) + (DiagnosticsPressed() ? "p" : "");
     if (Focus().page >= 0) key += "/scroll" + std::to_string(Focus().dScroll) + "," + std::to_string(Focus().rScroll) + "," + std::to_string(Focus().nScroll);
     key += GridOnly() ? "/grid-only" : "/banner";
     for (const Game& g : games) key += "|" + g.rom + g.customName + (g.favourite ? "*" : "") + sig(g) + (g.soonAt ? ComingSoonText(g) : std::string());

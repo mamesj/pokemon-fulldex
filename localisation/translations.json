@@ -1371,7 +1371,17 @@
       "GBA SLOT": "RANURA GBA",
       "NIGHT FISHING REPLACEMENT": "PESCA NOCTURNA",
       "TIME REPLACEMENT": "SEGÚN LA HORA",
-      "And {0} more places": "Y {0} lugares más"
+      "And {0} more places": "Y {0} lugares más",
+      "REPORT A BUG": "INFORMAR DE UN ERROR",
+      "DIAGNOSTICS COPIED": "DIAGNÓSTICO COPIADO",
+      "SAVED TO diagnostics.txt": "GUARDADO EN diagnostics.txt",
+      "COULD NOT SAVE DIAGNOSTICS": "NO SE PUDO GUARDAR EL DIAGNÓSTICO",
+      "Version, device and the end of game.log": "Versión, dispositivo y el final de game.log",
+      "Copies the version, platform, game, display settings and the last 200 lines of game.log to the clipboard, and writes diagnostics.txt beside the log. Paste it into Discord or a GitHub issue.": "Copia la versión, la plataforma, el juego, los ajustes de pantalla y las últimas 200 líneas de game.log al portapapeles, y escribe diagnostics.txt junto al registro. Pégalo en Discord o en una incidencia de GitHub.",
+      "COPY AGAIN": "COPIAR OTRA VEZ",
+      "Paste it into Discord or a GitHub issue.": "Pégalo en Discord o en una incidencia de GitHub.",
+      "Attach diagnostics.txt, beside game.log, to your report.": "Adjunta diagnostics.txt, junto a game.log, a tu informe.",
+      "The folder could not be written. Copy the details another way.": "No se pudo escribir en la carpeta. Copia los detalles de otra forma."
     },
     "it": {
       " (NEXT START)": " (AL RIAVVIO)",
@@ -2735,7 +2745,17 @@
       "GBA SLOT": "SLOT GBA",
       "NIGHT FISHING REPLACEMENT": "PESCA NOTTURNA",
       "TIME REPLACEMENT": "IN BASE ALL'ORA",
-      "And {0} more places": "E altri {0} luoghi"
+      "And {0} more places": "E altri {0} luoghi",
+      "REPORT A BUG": "SEGNALA UN BUG",
+      "DIAGNOSTICS COPIED": "DIAGNOSTICA COPIATA",
+      "SAVED TO diagnostics.txt": "SALVATO IN diagnostics.txt",
+      "COULD NOT SAVE DIAGNOSTICS": "IMPOSSIBILE SALVARE LA DIAGNOSTICA",
+      "Version, device and the end of game.log": "Versione, dispositivo e la fine di game.log",
+      "Copies the version, platform, game, display settings and the last 200 lines of game.log to the clipboard, and writes diagnostics.txt beside the log. Paste it into Discord or a GitHub issue.": "Copia negli appunti la versione, la piattaforma, il gioco, le impostazioni dello schermo e le ultime 200 righe di game.log, e scrive diagnostics.txt accanto al registro. Incollalo in Discord o in una segnalazione su GitHub.",
+      "COPY AGAIN": "COPIA DI NUOVO",
+      "Paste it into Discord or a GitHub issue.": "Incollalo in Discord o in una segnalazione su GitHub.",
+      "Attach diagnostics.txt, beside game.log, to your report.": "Allega diagnostics.txt, accanto a game.log, alla tua segnalazione.",
+      "The folder could not be written. Copy the details another way.": "Impossibile scrivere nella cartella. Copia i dettagli in un altro modo."
     },
     "fr": {
       " (NEXT START)": " (PROCHAIN DÉBUT)",
@@ -4099,7 +4119,17 @@
       "GBA SLOT": "PORT GBA",
       "NIGHT FISHING REPLACEMENT": "PÊCHE DE NUIT",
       "TIME REPLACEMENT": "SELON L'HEURE",
-      "And {0} more places": "Et {0} autres lieux"
+      "And {0} more places": "Et {0} autres lieux",
+      "REPORT A BUG": "SIGNALER UN BUG",
+      "DIAGNOSTICS COPIED": "DIAGNOSTIC COPIÉ",
+      "SAVED TO diagnostics.txt": "ENREGISTRÉ DANS diagnostics.txt",
+      "COULD NOT SAVE DIAGNOSTICS": "IMPOSSIBLE D'ENREGISTRER LE DIAGNOSTIC",
+      "Version, device and the end of game.log": "Version, appareil et la fin de game.log",
+      "Copies the version, platform, game, display settings and the last 200 lines of game.log to the clipboard, and writes diagnostics.txt beside the log. Paste it into Discord or a GitHub issue.": "Copie la version, la plateforme, le jeu, les réglages d'affichage et les 200 dernières lignes de game.log dans le presse-papiers, et écrit diagnostics.txt à côté du journal. Collez-le dans Discord ou dans un problème GitHub.",
+      "COPY AGAIN": "COPIER À NOUVEAU",
+      "Paste it into Discord or a GitHub issue.": "Collez-le dans Discord ou dans un problème GitHub.",
+      "Attach diagnostics.txt, beside game.log, to your report.": "Joignez diagnostics.txt, à côté de game.log, à votre rapport.",
+      "The folder could not be written. Copy the details another way.": "Impossible d'écrire dans le dossier. Copiez les détails autrement."
     },
     "de": {
       " (NEXT START)": " (NÄCHSTER START)",
@@ -5463,7 +5493,17 @@
       "GBA SLOT": "GBA-SCHACHT",
       "NIGHT FISHING REPLACEMENT": "ANGELN BEI NACHT",
       "TIME REPLACEMENT": "JE NACH UHRZEIT",
-      "And {0} more places": "Und {0} weitere Orte"
+      "And {0} more places": "Und {0} weitere Orte",
+      "REPORT A BUG": "FEHLER MELDEN",
+      "DIAGNOSTICS COPIED": "DIAGNOSE KOPIERT",
+      "SAVED TO diagnostics.txt": "GESPEICHERT IN diagnostics.txt",
+      "COULD NOT SAVE DIAGNOSTICS": "DIAGNOSE KONNTE NICHT GESPEICHERT WERDEN",
+      "Version, device and the end of game.log": "Version, Gerät und das Ende von game.log",
+      "Copies the version, platform, game, display settings and the last 200 lines of game.log to the clipboard, and writes diagnostics.txt beside the log. Paste it into Discord or a GitHub issue.": "Kopiert Version, Plattform, Spiel, Anzeigeeinstellungen und die letzten 200 Zeilen von game.log in die Zwischenablage und schreibt diagnostics.txt neben das Log. Füge es in Discord oder ein GitHub-Problem ein.",
+      "COPY AGAIN": "NOCHMAL KOPIEREN",
+      "Paste it into Discord or a GitHub issue.": "Füge es in Discord oder ein GitHub-Problem ein.",
+      "Attach diagnostics.txt, beside game.log, to your report.": "Hänge diagnostics.txt, neben game.log, an deinen Bericht an.",
+      "The folder could not be written. Copy the details another way.": "Der Ordner konnte nicht beschrieben werden. Kopiere die Details anders."
     },
     "ja": {
       " (NEXT START)": " (次のスタート)",
@@ -6827,7 +6867,17 @@
       "GBA SLOT": "GBAスロット",
       "NIGHT FISHING REPLACEMENT": "夜のつり",
       "TIME REPLACEMENT": "時間帯で変化",
-      "And {0} more places": "ほか{0}か所"
+      "And {0} more places": "ほか{0}か所",
+      "REPORT A BUG": "バグを報告",
+      "DIAGNOSTICS COPIED": "診断情報をコピーしました",
+      "SAVED TO diagnostics.txt": "diagnostics.txt に保存しました",
+      "COULD NOT SAVE DIAGNOSTICS": "診断情報を保存できませんでした",
+      "Version, device and the end of game.log": "バージョン、デバイス、game.log の末尾",
+      "Copies the version, platform, game, display settings and the last 200 lines of game.log to the clipboard, and writes diagnostics.txt beside the log. Paste it into Discord or a GitHub issue.": "バージョン、プラットフォーム、ゲーム、画面設定、game.log の最後の200行をクリップボードにコピーし、ログの隣に diagnostics.txt を書き出します。Discord または GitHub の Issue に貼り付けてください。",
+      "COPY AGAIN": "もう一度コピー",
+      "Paste it into Discord or a GitHub issue.": "Discord または GitHub の Issue に貼り付けてください。",
+      "Attach diagnostics.txt, beside game.log, to your report.": "game.log の隣にある diagnostics.txt を報告に添付してください。",
+      "The folder could not be written. Copy the details another way.": "フォルダに書き込めませんでした。別の方法で詳細をコピーしてください。"
     },
     "ko": {
       " (NEXT START)": " (다음 시작)",
@@ -8191,7 +8241,17 @@
       "GBA SLOT": "GBA 슬롯",
       "NIGHT FISHING REPLACEMENT": "밤 낚시",
       "TIME REPLACEMENT": "시간대에 따라",
-      "And {0} more places": "외 {0}곳"
+      "And {0} more places": "외 {0}곳",
+      "REPORT A BUG": "버그 신고",
+      "DIAGNOSTICS COPIED": "진단 정보를 복사했습니다",
+      "SAVED TO diagnostics.txt": "diagnostics.txt에 저장했습니다",
+      "COULD NOT SAVE DIAGNOSTICS": "진단 정보를 저장하지 못했습니다",
+      "Version, device and the end of game.log": "버전, 기기, game.log의 마지막 부분",
+      "Copies the version, platform, game, display settings and the last 200 lines of game.log to the clipboard, and writes diagnostics.txt beside the log. Paste it into Discord or a GitHub issue.": "버전, 플랫폼, 게임, 화면 설정, game.log의 마지막 200줄을 클립보드에 복사하고 로그 옆에 diagnostics.txt를 저장합니다. Discord나 GitHub 이슈에 붙여넣으세요.",
+      "COPY AGAIN": "다시 복사",
+      "Paste it into Discord or a GitHub issue.": "Discord나 GitHub 이슈에 붙여넣으세요.",
+      "Attach diagnostics.txt, beside game.log, to your report.": "game.log 옆의 diagnostics.txt를 신고에 첨부하세요.",
+      "The folder could not be written. Copy the details another way.": "폴더에 쓸 수 없습니다. 다른 방법으로 세부 정보를 복사하세요."
     }
   }
 }

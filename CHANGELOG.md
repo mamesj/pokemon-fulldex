@@ -19,6 +19,7 @@
 - **Android:** two crashes at start-up fixed: one while the screen was still being set up, one when the graphics chip refused to start (the processor now draws the game instead). The README explains where Android saves go and how to choose your own Saves Folder (#205).
 - **Game Options in the launcher** keeps its focus and opens the selected game's menu under the button (#191).
 - **About > Credits:** OzWookiee, Saiborg23 and elripalda.
+- **Report A Bug: the details, ready to paste** (Settings in the pause menu, and About in the launcher). It copies the version, platform, game, display settings and the last 200 lines of `game.log` to the clipboard, and writes `diagnostics.txt` beside the log for attaching. Nothing is sent anywhere: paste it into Discord or a GitHub issue.
 
 ## FullDex 1.6 (16 November 2026)
 

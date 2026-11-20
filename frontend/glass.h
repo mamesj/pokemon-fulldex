@@ -525,7 +525,7 @@ enum Icon
     I_PLAY, I_SAVE, I_LOAD, I_CHEATS, I_FAST, I_TROPHY, I_GEAR, I_POWER,
     I_BACK, I_MONITOR, I_SCREENS, I_GLOBE, I_RATIO, I_LAYOUT, I_EXPAND, I_FULLSCREEN, I_GRID, I_LAYERS,
     I_PAD, I_GAUGE, I_WINDOW, I_PEOPLE, I_SPARKLE, I_INFO, I_CHEVRON_L, I_CHEVRON_R, I_CHEVRON_U, I_CHEVRON_D, I_POKEBALL, I_CHIP, I_SPEAKER, I_REWIND,
-    I_PAUSE, I_PREV, I_NEXT, I_NOTE, I_CHAT, I_SEARCH, I_SORT, I_HOME,
+    I_PAUSE, I_PREV, I_NEXT, I_NOTE, I_CHAT, I_SEARCH, I_SORT, I_HOME, I_BUG,
     I_COUNT
 };
 // A rhombus centred on (cx, cy), half width a and half height b (close to a true distance).
@@ -738,6 +738,25 @@ inline void DrawIcon(Canvas& c, int icon, float cx, float cy, float size, uint32
             const float walls = std::min(Segment(u, v, -0.62f, -0.22f, -0.62f, 0.72f, t / 2), std::min(Segment(u, v, 0.62f, -0.22f, 0.62f, 0.72f, t / 2), Segment(u, v, -0.62f, 0.72f, 0.62f, 0.72f, t / 2)));
             const float door = std::min(Segment(u, v, -0.2f, 0.72f, -0.2f, 0.18f, t / 2), std::min(Segment(u, v, -0.2f, 0.18f, 0.2f, 0.18f, t / 2), Segment(u, v, 0.2f, 0.18f, 0.2f, 0.72f, t / 2)));
             return std::min(roof, std::min(walls, door));
+        }
+        case I_BUG:
+        {
+            // (A ladybug: an oval back split down the middle, a head with two antennae, and six legs.)
+            const float back = std::fabs(Circle(u, v * 1.12f, 0, 0.18f, 0.6f)) - t / 2;
+            const float split = Segment(u, v, 0, -0.28f, 0, 0.72f, t * 0.45f);
+            const float head = std::fabs(Circle(u, v, 0, -0.68f, 0.19f)) - t / 2;
+            const float feelers = std::min(Segment(u, v, -0.1f, -0.82f, -0.32f, -0.98f, t / 2),
+                                           Segment(u, v, 0.1f, -0.82f, 0.32f, -0.98f, t / 2));
+            float legs = 1.0f;
+            for (int i = 0; i < 3; i++)
+            {
+                const float y = -0.24f + i * 0.32f;
+                legs = std::min(legs, std::min(Segment(u, v, -0.42f, y, -0.74f, y - 0.14f + i * 0.14f, t / 2),
+                                               Segment(u, v, 0.42f, y, 0.74f, y - 0.14f + i * 0.14f, t / 2)));
+            }
+            const float spots = std::min(Circle(u, v, -0.22f, 0.06f, 0.09f),
+                                         std::min(Circle(u, v, 0.22f, 0.06f, 0.09f), Circle(u, v, 0, 0.44f, 0.08f)));
+            return std::min(std::min(back, split), std::min(std::min(head, feelers), std::min(legs, spots)));
         }
         case I_POKEBALL:
         {

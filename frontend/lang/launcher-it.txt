@@ -341,6 +341,15 @@ Fulldex checks once each time it starts.	Fulldex controlla una volta a ogni avvi
 Support	Sostegno
 Credits	Crediti
 Report A Bug	Segnala un errore
+Found something wrong? Copy the details, then paste them into Discord or a GitHub issue. Say which game, which device, and what happened just before.	Qualcosa non va? Copia i dettagli e incollali in Discord o in una segnalazione su GitHub. Indica quale gioco, quale dispositivo e cosa è successo subito prima.
+A screenshot helps too. Nothing is sent until you paste it.	Anche uno screenshot aiuta. Nulla viene inviato finché non lo incolli.
+Version, device, settings and the last 200 lines of game.log	Versione, dispositivo, impostazioni e le ultime 200 righe di game.log
+Open the GitHub issues page	Apri la pagina delle segnalazioni di GitHub
+DIAGNOSTICS COPIED	DIAGNOSTICA COPIATA
+SAVED TO diagnostics.txt	SALVATO IN diagnostics.txt
+COULD NOT SAVE DIAGNOSTICS	IMPOSSIBILE SALVARE LA DIAGNOSTICA
+Paste it into your report.	Incollalo nella tua segnalazione.
+Attach diagnostics.txt to your report.	Allega diagnostics.txt alla tua segnalazione.
 Licences	Licenze
 Website	Sito web
 Fulldex doesn't include any games. Play with ROMs from games you own.	Fulldex non include alcun gioco. Gioca con ROM di giochi che possiedi.
@@ -360,8 +369,7 @@ How the HOME Menu icons are made	Come si fanno le icone del menu HOME
 Cheats menu ideas (PR #16)	Idee per il menu dei trucchi (PR #16)
 Everyone who reported bugs and helped test	Tutti quelli che hanno segnalato bug e aiutato a testare
 Thank you	Grazie
-Found something wrong? Open an issue on the GitHub page: say which game, which device, and what happened just before.	Qualcosa non va? Apri una segnalazione nella pagina GitHub: dì quale gioco, quale dispositivo e cosa è successo subito prima.
-A screenshot helps, and so does game.log from the folder Fulldex runs from.	Uno screenshot aiuta, come il game.log nella cartella da cui esegui Fulldex.
+Copy Diagnostics	Copia diagnostica
 Not affiliated with or endorsed by Nintendo, Game Freak, The Pokémon Company or the melonDS project. Pokémon is a trademark of its owners. The full licence texts are on the GitHub page.	Non affiliato né approvato da Nintendo, Game Freak, The Pokémon Company o dal progetto melonDS. Pokémon è un marchio registrato dei rispettivi proprietari. I testi completi delle licenze sono nella pagina GitHub.
 Downloads, the latest changes and the full instructions are on the GitHub page.	Download, ultime modifiche e istruzioni complete sono nella pagina GitHub.
 Tips are welcome but never expected: see Support, at the top of this page.	Le mance sono gradite ma mai pretese: vedi Sostegno, in alto in questa pagina.
