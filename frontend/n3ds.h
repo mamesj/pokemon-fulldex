@@ -620,6 +620,11 @@ inline bool MakeFolder(const std::string& appDir, const Launcher::Game& g)
     namespace fs = std::filesystem;
     std::error_code ec;
     fs::create_directories(W(g.folder), ec);
+    if (ec)
+    {
+        fprintf(stderr, "[3ds] cannot make %s: %d %s\n", g.folder.c_str(), ec.value(), ec.message().c_str());
+        return false;
+    }
     const fs::path from = W(ProgramDir(appDir)), to = W(g.folder);
     // An executable alone is not a complete kit. Retry missing tools after an interrupted
     // copy or extraction, while preserving existing settings and prepared game files.
@@ -627,7 +632,11 @@ inline bool MakeFolder(const std::string& appDir, const Launcher::Game& g)
     if (fs::is_directory(from, ec) || !fs::is_regular_file(W(Exe(g.folder)), ec))
     {
         if (!RuntimeKit::CopyMissing(from, to, ec))
-        { fprintf(stderr, "[3ds] copying the program to %s: %s\n", g.folder.c_str(), ec.message().c_str()); return false; }
+        {
+            fprintf(stderr, "[3ds] copying the program to %s from %s: %d %s\n",
+                    g.folder.c_str(), ProgramDir(appDir).c_str(), ec.value(), ec.message().c_str());
+            return false;
+        }
     }
 #ifdef _WIN32
     FILE* f = _wfopen(W(g.folder + "/rom.txt").c_str(), L"wb");
