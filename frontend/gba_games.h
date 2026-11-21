@@ -15,13 +15,26 @@ namespace GbaGames
 {
 
 // The game code the list goes by (Launcher::Order, a desktop shortcut's --game): the cartridge's
-// own, except Ultra Violet's (a FireRed hack: BPRE too).
+// own, except Ultra Violet's (a FireRed hack: BPRE too). Ruby's and Sapphire's codes start AXV
+// and AXP, which IsHack() reads; without them the list called both games ROM hacks (#238).
 inline std::string CodeOf(const std::string& key)
 {
     if (key == "emerald") return "BPEE";
     if (key == "ultraviolet") return "UV22";
     if (key == "firered") return "BPRE";
     if (key == "leafgreen") return "BPGE";
+    if (key == "ruby") return "AXVE";
+    if (key == "rubyde") return "AXVD";
+    if (key == "rubyfr") return "AXVF";
+    if (key == "rubyes") return "AXVS";
+    if (key == "rubyit") return "AXVI";
+    if (key == "rubyjp") return "AXVJ";
+    if (key == "sapphire") return "AXPE";
+    if (key == "sapphirede") return "AXPD";
+    if (key == "sapphirefr") return "AXPF";
+    if (key == "sapphirees") return "AXPS";
+    if (key == "sapphireit") return "AXPI";
+    if (key == "sapphirejp") return "AXPJ";
     return "GBA-" + key;
 }
 

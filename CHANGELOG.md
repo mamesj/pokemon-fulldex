@@ -1,6 +1,10 @@
 # Changelog
 
 
+## FullDex 1.7.1 (not released yet)
+
+- **GBA Ruby and Sapphire are their games again, not ROM hacks** (#238): their codes (AXV and AXP) were missing from the list, so every revision, unchanged or not, was put in the ROMHACKS tab.
+
 ## FullDex 1.7 (not released yet)
 
 - **Pokémon X, Y, Ultra Sun and Ultra Moon (3DS beta).** FullDex lists a .3ds dump of any of them with your ROMs and plays it the same way as Omega Ruby and Alpha Sapphire: on a PC the game's code is built once from your dump (about 5 minutes), on a phone too. Each keeps its own save (pokemonx.sav, pokemony.sav, ultrasun.sav, ultramoon.sav) with your other saves.
